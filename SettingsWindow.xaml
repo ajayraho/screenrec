@@ -1,0 +1,172 @@
+<Window x:Class="ScreenRecApp.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Settings - ScreenRecApp" Width="500" SizeToContent="Height"
+        WindowStartupLocation="CenterScreen"
+        Background="Transparent" Foreground="#cdd6f4"
+        WindowStyle="None" AllowsTransparency="True" ResizeMode="NoResize"
+        ShowInTaskbar="True" Topmost="True">
+    
+    <Border Background="#1e1e2e" CornerRadius="12" BorderBrush="#313244" BorderThickness="1" Margin="10"
+            SnapsToDevicePixels="True" UseLayoutRounding="True"
+            TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
+            RenderOptions.ClearTypeHint="Enabled">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="15" Direction="270" Opacity="0.5" ShadowDepth="2"/>
+        </Border.Effect>
+        
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/> <!-- Custom Header -->
+                <RowDefinition Height="*"/>    <!-- Main Content -->
+            </Grid.RowDefinitions>
+
+            <!-- Custom Header / Title Bar -->
+            <Grid Grid.Row="0" Background="#181825" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <StackPanel Orientation="Horizontal" Margin="15,10">
+                    <Ellipse Width="12" Height="12" Fill="#89b4fa" Margin="0,0,10,0"/>
+                    <TextBlock Text="ScreenRecApp Settings" FontSize="14" FontWeight="SemiBold" Foreground="#89b4fa" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <Button Grid.Column="1" Content="✕" Click="Close_Click" Width="40" Height="30" 
+                        Background="Transparent" Foreground="#f38ba8" BorderThickness="0" FontSize="16" Cursor="Hand">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{TemplateBinding Background}">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#313244"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </Grid>
+
+            <Grid Grid.Row="1" Margin="20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="Save Location Directory:" FontSize="13" Foreground="#a6adc8" Margin="0,0,0,5" />
+                
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="SavePathBox" Height="32" FontSize="13" Padding="8,0" 
+                             Background="#11111b" Foreground="#cdd6f4" BorderBrush="#313244" VerticalContentAlignment="Center" BorderThickness="1" />
+                    <Button Grid.Column="1" Content="Browse" Width="70" Height="32" Margin="10,0,0,0" 
+                            Background="#313244" Foreground="#cdd6f4" BorderThickness="0" Click="Browse_Click"/>
+                </Grid>
+
+                <StackPanel Grid.Row="2" Margin="0,20,0,0">
+                    <TextBlock Text="Recording Hotkey:" FontSize="13" Foreground="#a6adc8" Margin="0,0,0,8" />
+                    <Border Background="#11111b" CornerRadius="6" Padding="15,10" BorderBrush="#313244" BorderThickness="1">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <CheckBox x:Name="ChkModWin" Content="Win" Foreground="#cdd6f4" Margin="0,0,20,0" VerticalAlignment="Center"/>
+                                <CheckBox x:Name="ChkModCtrl" Content="Ctrl" Foreground="#cdd6f4" Margin="0,0,20,0" VerticalAlignment="Center"/>
+                                <CheckBox x:Name="ChkModShift" Content="Shift" Foreground="#cdd6f4" Margin="0,0,20,0" VerticalAlignment="Center"/>
+                                <CheckBox x:Name="ChkModAlt" Content="Alt" Foreground="#cdd6f4" Margin="0,0,25,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="+" Foreground="#6c7086" VerticalAlignment="Center" Margin="0,0,15,0" FontSize="18"/>
+                                <TextBox x:Name="HotkeyCharBox" Width="90" Height="32" FontSize="13" FontWeight="Bold"
+                                         Background="#181825" Foreground="#f9e2af" BorderBrush="#313244" BorderThickness="1"
+                                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                         IsReadOnly="True" PreviewKeyDown="HotkeyCharBox_PreviewKeyDown" Cursor="Hand" ToolTip="Click and press key"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <Grid Grid.Row="3" Margin="0,20,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Reminder Notification Timer (minutes):" FontSize="13" Foreground="#a6adc8" VerticalAlignment="Center"/>
+                    <TextBox x:Name="TimerMinutesBox" Grid.Column="1" Width="60" Height="32" FontSize="13" Padding="5,0"
+                             Background="#11111b" Foreground="#f9e2af" BorderBrush="#313244" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
+                </Grid>
+
+                <Grid Grid.Row="4" Margin="0,20,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="110" />
+                    </Grid.ColumnDefinitions>
+                    
+                    <TextBlock Text="Quality:" FontSize="13" Foreground="#a6adc8" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <ComboBox x:Name="QualityCombo" Grid.Column="1" Height="30" FontSize="13" Background="#11111b" BorderBrush="#313244">
+                        <ComboBoxItem Content="High" />
+                        <ComboBoxItem Content="Medium" />
+                        <ComboBoxItem Content="Low" />
+                    </ComboBox>
+
+                    <TextBlock Grid.Column="2" Text="FPS:" FontSize="13" Foreground="#a6adc8" VerticalAlignment="Center" Margin="20,0,10,0"/>
+                    <ComboBox x:Name="FpsCombo" Grid.Column="3" Height="30" FontSize="13" Background="#11111b" BorderBrush="#313244">
+                        <ComboBoxItem Content="60 FPS" Tag="60" />
+                        <ComboBoxItem Content="30 FPS" Tag="30" />
+                        <ComboBoxItem Content="15 FPS" Tag="15" />
+                    </ComboBox>
+                </Grid>
+
+                <Grid Grid.Row="5" Margin="0,20,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="100" />
+                    </Grid.ColumnDefinitions>
+                    
+                    <TextBlock Text="Mic Boost:" FontSize="13" Foreground="#a6adc8" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <Slider x:Name="MicBoostSlider" Grid.Column="1" Minimum="1" Maximum="10" TickFrequency="0.5" IsSnapToTickEnabled="True"
+                            VerticalAlignment="Center" Margin="0,0,10,0" ValueChanged="MicBoostSlider_ValueChanged" />
+                    <TextBlock x:Name="MicBoostText" Grid.Column="2" Text="1.0x" FontSize="13" Width="40" VerticalAlignment="Center" Margin="0,0,15,0"/>
+
+                    <Button x:Name="TestMicButton" Grid.Column="3" Content="Test" Height="28" Width="50" Margin="0,0,10,0"
+                            Background="#313244" Foreground="#cdd6f4" BorderThickness="0" Click="TestMic_Click" />
+                    <ProgressBar x:Name="MicLevelBar" Grid.Column="4" Height="10" Minimum="0" Maximum="1" 
+                                 Background="#11111b" Foreground="#a6e3a1" BorderThickness="0" VerticalAlignment="Center"/>
+                </Grid>
+
+                <StackPanel Grid.Row="6" Margin="0,20,0,0">
+                    <TextBlock x:Name="StatusText" Text="Status: Idle" FontSize="14" FontWeight="SemiBold" Foreground="#a6e3a1" Margin="0"/>
+                </StackPanel>
+
+                <Grid Grid.Row="7" Margin="0,25,0,0">
+                    <CheckBox x:Name="DevModeCheck" Content="Dev Data" Foreground="#6c7086" VerticalAlignment="Center" HorizontalAlignment="Left" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="Cancel" Width="80" Height="35" Click="Close_Click" Margin="0,0,10,0"
+                                Background="#313244" Foreground="#cdd6f4" FontWeight="SemiBold" BorderThickness="0" Cursor="Hand"/>
+                        <Button Content="Apply &amp; Save" Width="110" Height="35" Background="#89b4fa" Foreground="#11111b" 
+                                FontWeight="SemiBold" BorderThickness="0" Click="Save_Click" Cursor="Hand"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

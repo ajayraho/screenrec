@@ -1,0 +1,31 @@
+# .NET 9.0 Standard GitIgnore
+[Bb]in/
+[Oo]bj/
+out/
+publish/
+
+# Visual Studio / IDE specific
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.sln.docstates
+*.userosscache
+*.sln.targets
+
+# Application specific
+# We ignore recordings, system logs and local setup
+*.mp4
+*.wav
+*.log
+settings.json
+app.log
+
+# Operating System specific
+[Th]umbs.db
+Desktop.ini
+
+# Temp files
+*.tmp
+*.bak
