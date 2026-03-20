@@ -52,6 +52,14 @@ namespace ScreenRecApp
         {
             if (IsRecording) return false;
 
+            // Kill any leftover ffmpeg from a previous failed/crashed session
+            if (_ffmpegProcess != null)
+            {
+                try { if (!_ffmpegProcess.HasExited) _ffmpegProcess.Kill(); } catch { }
+                _ffmpegProcess.Dispose();
+                _ffmpegProcess = null;
+            }
+
             string tempDir = Path.Combine(Path.GetTempPath(), "ScreenRecApp");
             if (!Directory.Exists(tempDir)) Directory.CreateDirectory(tempDir);
 
@@ -114,10 +122,25 @@ namespace ScreenRecApp
                     App._devWindow.ReportCommand(startInfo.FileName + " " + startInfo.Arguments);
                 }
 
+                int frameLogCounter = 0;
                 _ffmpegProcess.ErrorDataReceived += (s, e) => { 
-                    if (e.Data != null) 
+                    if (!string.IsNullOrWhiteSpace(e.Data)) 
                     {
-                        Logger.Log($"[FFmpeg Video]: {e.Data}"); 
+                        // FFmpeg spams 'frame=' stats multiple times a second. We drop these 
+                        // to save massive amounts of CPU, Disk I/O, and UI Dispatcher flooding
+                        if (!e.Data.StartsWith("frame=") && !e.Data.StartsWith("size="))
+                        {
+                            if (SettingsManager.Settings.DeveloperMode)
+                                Logger.Log($"[FFmpeg Video]: {e.Data}"); 
+                        }
+                        else if (SettingsManager.Settings.DeveloperMode)
+                        {
+                            frameLogCounter++;
+                            if (frameLogCounter % 30 == 0) // Roughly once per second (at 30fps)
+                            {
+                                Logger.Log("Recording in progress...");
+                            }
+                        }
                     }
                 };
 
@@ -179,11 +202,14 @@ namespace ScreenRecApp
                     Logger.LogError(ex, "NAudio Mic Stop");
                 }
 
-                // STOP VIDEO
                 if (_ffmpegProcess != null && !_ffmpegProcess.HasExited)
                 {
                     _ffmpegProcess.StandardInput.WriteLine("q");
-                    await Task.Run(() => _ffmpegProcess.WaitForExit(5000));
+                    
+                    // CRITICAL FOR LONG VIDEOS: For a 2 hour recording, FFmpeg takes 10+ seconds 
+                    // just to write the "moov atom" (MP4 video index) to the end of the file. 
+                    // If we kill it too early, the 5GB MP4 file is instantly corrupted forever.
+                    await Task.Run(() => _ffmpegProcess.WaitForExit(60000)); // wait up to 60 sec
                     
                     if (!_ffmpegProcess.HasExited)
                     {
@@ -207,15 +233,15 @@ namespace ScreenRecApp
 
                     if (sysExists && micExists)
                     {
-                        muxArgs = $"-y -i \"{_tempFilePath}\" -i \"{_tempAudioPath}\" -i \"{_tempMicAudioPath}\" -filter_complex \"[2:a]{volFilter}[mic_boost];[1:a][mic_boost]amix=inputs=2:duration=longest[a]\" -map 0:v -map \"[a]\" -c:v copy -c:a aac \"{_finalTempPath}\"";
+                        muxArgs = $"-y -i \"{_tempFilePath}\" -i \"{_tempAudioPath}\" -i \"{_tempMicAudioPath}\" -filter_complex \"[2:a]{volFilter}[mic_boost];[1:a][mic_boost]amix=inputs=2:duration=longest[a]\" -map 0:v -map \"[a]\" -c:v copy -c:a aac -b:a 192k -movflags +faststart \"{_finalTempPath}\"";
                     }
                     else if (sysExists)
                     {
-                        muxArgs = $"-y -i \"{_tempFilePath}\" -i \"{_tempAudioPath}\" -c:v copy -c:a aac \"{_finalTempPath}\"";
+                        muxArgs = $"-y -i \"{_tempFilePath}\" -i \"{_tempAudioPath}\" -c:v copy -c:a aac -b:a 192k -movflags +faststart \"{_finalTempPath}\"";
                     }
                     else if (micExists)
                     {
-                        muxArgs = $"-y -i \"{_tempFilePath}\" -i \"{_tempMicAudioPath}\" -filter_complex \"[1:a]{volFilter}[a]\" -map 0:v -map \"[a]\" -c:v copy -c:a aac \"{_finalTempPath}\"";
+                        muxArgs = $"-y -i \"{_tempFilePath}\" -i \"{_tempMicAudioPath}\" -filter_complex \"[1:a]{volFilter}[a]\" -map 0:v -map \"[a]\" -c:v copy -c:a aac -b:a 192k -movflags +faststart \"{_finalTempPath}\"";
                     }
                     else
                     {
@@ -238,12 +264,23 @@ namespace ScreenRecApp
                             App._devWindow.ReportCommand(muxInfo.FileName + " " + muxInfo.Arguments);
                         }
 
-                        var muxProc = Process.Start(muxInfo);
-                        if (muxProc != null)
+                        using (var muxProc = Process.Start(muxInfo))
                         {
-                            muxProc.ErrorDataReceived += (s, e) => { if (e.Data != null) Logger.Log($"[FFmpeg MUX]: {e.Data}"); };
-                            muxProc.BeginErrorReadLine();
-                            await Task.Run(() => muxProc.WaitForExit(15000));
+                            if (muxProc != null)
+                            {
+                                muxProc.ErrorDataReceived += (s, e) => { 
+                                    if (!string.IsNullOrWhiteSpace(e.Data) && SettingsManager.Settings.DeveloperMode && !e.Data.StartsWith("size=")) 
+                                        Logger.Log($"[FFmpeg MUX]: {e.Data}"); 
+                                };
+                                muxProc.BeginErrorReadLine();
+                                
+                                // Muxing a 2+ hour recording containing 5-7 GB of video and audio
+                                // can take several minutes. Never time this out early. Wait up to 2 hours.
+                                await Task.Run(() => muxProc.WaitForExit(7200000));
+                                
+                                if (!muxProc.HasExited) { try { muxProc.Kill(); } catch { } }
+                                muxProc.CancelErrorRead();
+                            }
                         }
                     }
 
@@ -253,6 +290,7 @@ namespace ScreenRecApp
                     try { File.Delete(_tempMicAudioPath); } catch { }
 
                     Logger.Log("Muxing completed successfully.");
+                    CompactMemory(); // Aggressively free RAM after heavy recording session
                     return _finalTempPath;
                 }
             }
@@ -272,6 +310,26 @@ namespace ScreenRecApp
             }
 
             return null; // Return null if muxing failed completely
+        }
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool SetProcessWorkingSetSize(IntPtr process, UIntPtr minimumWorkingSetSize, UIntPtr maximumWorkingSetSize);
+
+        private void CompactMemory()
+        {
+            try
+            {
+                GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, true);
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+                SetProcessWorkingSetSize(Process.GetCurrentProcess().Handle, (UIntPtr)0xFFFFFFFF, (UIntPtr)0xFFFFFFFF);
+                Logger.Log("Memory compacted successfully.");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Memory Compaction");
+            }
         }
     }
 }

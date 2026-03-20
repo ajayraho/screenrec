@@ -17,17 +17,39 @@ namespace ScreenRecApp
         public static DevWindow _devWindow;
 
         private static System.Threading.Mutex? _mutex = null;
+        private SettingsWindow? _settingsWindow = null;
+
+        private void OpenSettings()
+        {
+            if (_settingsWindow != null)
+            {
+                _settingsWindow.Activate();
+                _settingsWindow.WindowState = WindowState.Normal;
+                return;
+            }
+            _settingsWindow = new SettingsWindow();
+            _settingsWindow.Closed += (s, ev) => _settingsWindow = null;
+            _settingsWindow.Show();
+        }
  
         private void Application_Startup(object sender, StartupEventArgs e)
         {
             const string appName = "ScreenRecApp_SingleInstance_Mutex";
-            bool createdNew;
-            _mutex = new System.Threading.Mutex(true, appName, out createdNew);
+            bool createdNew = false;
+            _mutex = new System.Threading.Mutex(false, appName);
+            try
+            {
+                createdNew = _mutex.WaitOne(0);
+            }
+            catch (System.Threading.AbandonedMutexException)
+            {
+                // Previous instance was force-killed — we inherit the mutex and proceed
+                createdNew = true;
+            }
 
             if (!createdNew)
             {
-                // App is already running!
-                System.Windows.MessageBox.Show("Another instance of the recorder is already running.", "Instance Error", MessageBoxButton.OK, MessageBoxImage.Information);
+                System.Windows.MessageBox.Show("Another instance of the recorder is already running.", "Already Running", MessageBoxButton.OK, MessageBoxImage.Information);
                 Shutdown();
                 return;
             }
@@ -50,10 +72,10 @@ namespace ScreenRecApp
             _notifyIcon.Text = "Sound Service Broker";
 
             var contextMenu = new System.Windows.Forms.ContextMenuStrip();
-            contextMenu.Items.Add("Settings", null, (s, ev) => new SettingsWindow().Show());
+            contextMenu.Items.Add("Settings", null, (s, ev) => OpenSettings());
             contextMenu.Items.Add("Exit", null, (s, ev) => Shutdown());
             _notifyIcon.ContextMenuStrip = contextMenu;
-            _notifyIcon.DoubleClick += (s, ev) => new SettingsWindow().Show();
+            _notifyIcon.DoubleClick += (s, ev) => OpenSettings();
 
             Logger.Log("Starting Hotkey Registration...");
             try
@@ -97,6 +119,7 @@ namespace ScreenRecApp
 
                     string tempFilePath = await CurrentRecordingService.StopRecording();
                     Logger.Log($"Stopped recording. Temp path: {tempFilePath}");
+                    _devWindow?.SetRecordingState(false);
                     _notifyIcon.Text = "Sound Service Broker";
 
                     loader.Close();
@@ -110,7 +133,7 @@ namespace ScreenRecApp
                         if (result == true)
                         {
                             string finalName = string.IsNullOrEmpty(prompt.ResultName) ? "untitled" : prompt.ResultName;
-                            string finalTimestamp = string.IsNullOrEmpty(prompt.ResultTimestamp) ? DateTime.Now.ToString("dd.MM.yy_HH.mm_") : prompt.ResultTimestamp;
+                            string finalTimestamp = string.IsNullOrEmpty(prompt.ResultTimestamp) ? DateTime.Now.ToString("ddMMyy_HHmmss_") : prompt.ResultTimestamp;
 
                             string targetDir = SettingsManager.Settings.SavePath;
                             if (!Directory.Exists(targetDir)) Directory.CreateDirectory(targetDir);
@@ -144,7 +167,8 @@ namespace ScreenRecApp
                 }
                 else
                 {
-                    // Start Recording
+                    // Start Recording - run on background thread so audio device 
+                    // init (WasapiCapture) never blocks the UI thread
                     Logger.Log("Attempting to start recording...");
                     
                     if (SettingsManager.Settings.DeveloperMode && _devWindow == null)
@@ -154,10 +178,12 @@ namespace ScreenRecApp
                         _devWindow.Show();
                     }
 
-                    bool started = CurrentRecordingService.StartRecording();
+                    bool started = await Task.Run(() => CurrentRecordingService.StartRecording());
+
                     if (started)
                     {
                         Logger.Log("Recording started successfully.");
+                        _devWindow?.SetRecordingState(true);
                         _notifyIcon.Text = "Sound Service Broker";
                         _notificationTimer.Interval = SettingsManager.Settings.NotificationTimerMinutes * 60 * 1000;
                         _notificationTimer.Start();
