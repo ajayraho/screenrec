@@ -41,6 +41,11 @@ This is a **100% portable program** built as a self-contained release. **No inst
    - Frames Per Second (FPS).
    - Mic boost.
    - Developer logging.
+
+<p align="center">
+  <img src="readme/settings.png" alt="Settings Menu" width="500" />
+</p>
+
 3. **Start Recording:** Press your global hotkey. It will instantly start recording in the background. A stealthy "reminder" balloon will occasionally pop up just to let you know the system is alive.
 4. **Stop Recording:** Press your global hotkey again. You'll briefly see an indeterminate progress bar while the core system muxes your audio and video. 
 5. **Save:** A prompt will ask you to name the file (pre-populated with a second-precision timestamp to prevent collisions).
@@ -53,6 +58,10 @@ If you're troubleshooting or curious about the FFmpeg pipelines:
 - Open Settings and enable **Developer Mode**.
 - The next time you press your shortcut, the **Broker Monitor** window will appear. 
 - It tracks FFmpeg pipeline status, live commands, and frame health at exactly 1 ping per second to prevent UI choking.
+
+<p align="center">
+  <img src="readme/dev.png" alt="Developer Console" width="600" />
+</p>
 
 ---
 
