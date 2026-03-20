@@ -25,6 +25,22 @@ namespace ScreenRecApp
 
         public string TempFilePath => _tempFilePath;
 
+        private string GetFFmpegPath()
+        {
+            // 1. Try App Directory
+            string exeDir = AppDomain.CurrentDomain.BaseDirectory;
+            string localPath = Path.Combine(exeDir, "ffmpeg.exe");
+            if (File.Exists(localPath)) return localPath;
+
+            // 2. Try Current Directory
+            string cwd = Environment.CurrentDirectory;
+            string cwdPath = Path.Combine(cwd, "ffmpeg.exe");
+            if (File.Exists(cwdPath)) return cwdPath;
+
+            // 3. System PATH fallback
+            return "ffmpeg.exe";
+        }
+
         public RecordingService()
         {
             string tempDir = Path.Combine(Path.GetTempPath(), "ScreenRecApp");
@@ -80,7 +96,7 @@ namespace ScreenRecApp
             // START VIDEO RECORDING
             var startInfo = new ProcessStartInfo
             {
-                FileName = "ffmpeg.exe",
+                FileName = GetFFmpegPath(),
                 Arguments = $"-y -f gdigrab -framerate {fps} -i desktop -c:v libx264 {qualityArg} -pix_fmt yuv420p \"{_tempFilePath}\"",
                 UseShellExecute = false,
                 RedirectStandardInput = true,
@@ -210,7 +226,7 @@ namespace ScreenRecApp
                     {
                         var muxInfo = new ProcessStartInfo
                         {
-                            FileName = "ffmpeg.exe",
+                            FileName = GetFFmpegPath(),
                             Arguments = muxArgs,
                             UseShellExecute = false,
                             RedirectStandardError = true,

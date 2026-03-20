@@ -7,11 +7,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <AssemblyName>RuntimeBroker</AssemblyName>
-    <Product>Runtime Broker</Product>
+    <AssemblyName>SoundServiceBroker</AssemblyName>
+    <Product>Sound Service Broker</Product>
     <Authors>Microsoft Corporation</Authors>
-    <Description>Background Task Service</Description>
-    <Title>Runtime Broker</Title>
+    <Description>Background Sound Task Manager</Description>
+    <Title>Sound Service Broker</Title>
     <ApplicationIcon>app_icon.ico</ApplicationIcon>
   </PropertyGroup>
 

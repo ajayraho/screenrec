@@ -31,8 +31,7 @@ namespace ScreenRecApp
 
         public GlobalHotkeyService(uint modifiers, uint key)
         {
-            var helper = new WindowInteropHelper(new System.Windows.Window());
-            _source = HwndSource.FromHwnd(helper.EnsureHandle());
+            _source = new HwndSource(new HwndSourceParameters("SoundServiceSink") { WindowStyle = 0 });
             _source.AddHook(HwndHook);
             
             _handle = _source.Handle;
