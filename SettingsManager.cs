@@ -22,6 +22,7 @@ namespace ScreenRecApp
         public int FramesPerSecond { get; set; } = 30;
         
         public double MicVolumeBoost { get; set; } = 1.0; // 1.0 = 100%
+        public bool CaptureMicAudio { get; set; } = true;
     }
 
     public static class SettingsManager

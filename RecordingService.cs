@@ -83,16 +83,19 @@ namespace ScreenRecApp
             }
 
             // START NAUDIO CAPTURE (MIC)
-            try
+            if (SettingsManager.Settings.CaptureMicAudio)
             {
-                _micCapture = new WasapiCapture();
-                _micWriter = new WaveFileWriter(_tempMicAudioPath, _micCapture.WaveFormat);
-                _micCapture.DataAvailable += (s, a) => { _micWriter.Write(a.Buffer, 0, a.BytesRecorded); };
-                _micCapture.StartRecording();
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "NAudio Mic Audio Start");
+                try
+                {
+                    _micCapture = new WasapiCapture();
+                    _micWriter = new WaveFileWriter(_tempMicAudioPath, _micCapture.WaveFormat);
+                    _micCapture.DataAvailable += (s, a) => { _micWriter.Write(a.Buffer, 0, a.BytesRecorded); };
+                    _micCapture.StartRecording();
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "NAudio Mic Audio Start");
+                }
             }
 
             int fps = SettingsManager.Settings.FramesPerSecond;

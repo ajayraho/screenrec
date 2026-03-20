@@ -55,6 +55,7 @@ namespace ScreenRecApp
             if (FpsCombo.SelectedItem == null) FpsCombo.SelectedIndex = 1;
 
             MicBoostSlider.Value = SettingsManager.Settings.MicVolumeBoost;
+            CaptureMicCheck.IsChecked = SettingsManager.Settings.CaptureMicAudio;
 
             _timer = new System.Windows.Threading.DispatcherTimer();
             _timer.Interval = System.TimeSpan.FromMilliseconds(500);
@@ -197,6 +198,7 @@ namespace ScreenRecApp
             SettingsManager.Settings.HotkeyDisplayText = displayText;
             
             SettingsManager.Settings.MicVolumeBoost = Math.Round(MicBoostSlider.Value, 1);
+            SettingsManager.Settings.CaptureMicAudio = CaptureMicCheck.IsChecked == true;
 
             if (int.TryParse(TimerMinutesBox.Text, out int mins) && mins > 0)
                 SettingsManager.Settings.NotificationTimerMinutes = mins;
