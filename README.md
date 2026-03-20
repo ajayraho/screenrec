@@ -65,3 +65,7 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=
 Ensure `ffmpeg.exe` is placed in the output directory (`bin/Release/net9.0-windows/win-x64/publish/`) alongside the executable before running.
 
 *Note: Desktop capture relies on the gdigrab input device. Recording hardware-encrypted DRM streams (e.g., Netflix via Edge) may result in a black screen due to OS-level HDCP protections.*
+
+---
+
+Made with ❤️ by Ajit K.
