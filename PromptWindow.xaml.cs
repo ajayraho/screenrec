@@ -11,7 +11,7 @@ namespace ScreenRecApp
         public PromptWindow()
         {
             InitializeComponent();
-            TimestampBox.Text = System.DateTime.Now.ToString("ddMMyy_HHmmss_");
+            TimestampBox.Text = System.DateTime.Now.ToString("dd.MM.yy_HH.mm.ss_");
             LoadSuggestions();
         }
 

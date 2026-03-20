@@ -133,7 +133,7 @@ namespace ScreenRecApp
                         if (result == true)
                         {
                             string finalName = string.IsNullOrEmpty(prompt.ResultName) ? "untitled" : prompt.ResultName;
-                            string finalTimestamp = string.IsNullOrEmpty(prompt.ResultTimestamp) ? DateTime.Now.ToString("ddMMyy_HHmmss_") : prompt.ResultTimestamp;
+                            string finalTimestamp = string.IsNullOrEmpty(prompt.ResultTimestamp) ? DateTime.Now.ToString("dd.MM.yy_HH.mm.ss_") : prompt.ResultTimestamp;
 
                             string targetDir = SettingsManager.Settings.SavePath;
                             if (!Directory.Exists(targetDir)) Directory.CreateDirectory(targetDir);
