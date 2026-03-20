@@ -1,89 +1,67 @@
-# 🎙️ Sound Service Broker (ScreenRecApp)
+# Sound Service Broker (ScreenRecApp)
 
-A **stealth-focused, highly optimized hardware-accelerated screen & audio recorder** built with C#, WPF, and FFmpeg. 
+A background utility for hardware-accelerated screen and audio recording on Windows. Built using C#, WPF, and FFmpeg, it focuses on remaining inconspicuous in the system tray while providing robust capture capabilities.
 
-It runs invisibly in your Windows System Tray (disguised as "Sound Service Broker" to avoid raising suspicion) and operates entirely via a hidden Global Hotkey.
+## Technical Overview
 
----
+The application runs as a background process and is controlled entirely via a global keyboard hook. It captures desktop video via gdigrab and system/microphone audio via NAudio (WASAPI), muxing them into optimized MP4 files upon completion.
 
-## ✨ Features
+### Core Capabilities
 
-- **🥷 Stealth Operation**: Appears in the system tray as "Sound Service Broker" with an innocuous system icon. Windows notifications never mention recording.
-- **⚡ Instant Global Hotkeys**: Uses raw, low-level Windows API hooks (HwndSource) to ensure your hotkey (`Ctrl + Shift + Z` by default) works instantly from anywhere—even inside fullscreen games.
-- **🎧 Dual Audio Capture**: Uses NAudio (WASAPI) to perfectly capture both **System Audio** and your **Microphone** simultaneously, automatically mixing them into the final video.
-- **🎙️ Mic Boost**: Custom audio filter built-in with volume multiplier for quiet microphones.
-- **🚀 Ultra-Optimized Resource Usage**: 
-  - Prevents FFmpeg log-spam to keep disk I/O and CPU usage near 0% during background running.
-  - Aggressive `SetProcessWorkingSetSize` memory compaction to forcefully free RAM the moment a recording finishes.
-- **⏱️ Built for Long Recordings**: Can comfortably capture 3+ hour meetings with custom graceful shutdown timeouts that prevent the `.mp4` from corrupting.
-- **💻 Premium Frameless UI**: A beautiful, custom-designed dark mode interface for the Settings menu and Developer Console.
-- **🌐 Web-Ready Video**: Automatically applies `-movflags +faststart` and encodes audio to `192k AAC` so resulting videos stream instantly on Discord or Google Drive without downloading first!
+*   **Inconspicuous Operation:** The process is registered and displayed as "Sound Service Broker" in the system tray and Task Manager. System notifications regarding capture events use generic text to avoid drawing attention during screen shares.
+*   **Low-latency Global Hotkeys:** Registers a system-wide hook (HwndSource) to ensure the configured shortcut (default: Shift + Ctrl + Win + Z) works globally, including full-screen applications.
+*   **Dual-Channel Audio:** Captures both system loopback audio and microphone input simultaneously. The application includes an optional microphone software volume booster, and a toggle to disable microphone capture entirely if strict system-audio-only recording is required.
+*   **Performance Tracking:** Includes a Developer Monitor console that logs FFmpeg pipeline status. To preserve CPU and disk I/O, statistical per-frame logging is throttled by default unless explicitly needed for debugging.
+*   **Long-Duration Reliability:** Contains specific logic to prevent MP4 file corruption on long recordings (e.g., 2+ hours). It forces garbage collection and trims the application working set immediately after muxing to ensure idle memory usage remains negligible (near 20MB).
+*   **Web-Optimized Output:** The muxing phase automatically applies the `-movflags +faststart` flag and encodes audio to 192kbps AAC, resulting in videos that can be streamed immediately upon uploading.
+*   **Collision-Proof File Saving:** Generates suggested file names using a strict DD.MM.YY_HH.MM.SS_ format.
 
----
+## System Requirements and Installation
 
-## 🛠️ Requirements & Installation
+The application is distributed as a self-contained, portable executable. It does not require a .NET runtime installation.
 
-This is a **100% portable program** built as a self-contained release. **No installer or .NET runtime is required.**
+1.  Download the latest release archive.
+2.  Extract the contents to a standard directory.
+3.  Ensure `ffmpeg.exe` is present in the exact same directory as `SoundServiceBroker.exe`. This is bundled by default in the official release package.
+4.  Run `SoundServiceBroker.exe`.
 
-1. Download the latest Release `.zip` file from the repository.
-2. Extract it into any folder on your PC.
-3. The release **already contains** the main `SoundServiceBroker.exe` program and the required `ffmpeg.exe` file bundled together.
-4. Simply double-click `SoundServiceBroker.exe` to run it instantly.
+## Configuration and Usage
 
----
+Upon starting, the application runs silently in the system tray. 
 
-## 🎮 How to Use
-
-1. **Launch it:** It will start silently. You will see a small, generic "Information" icon in your Windows system tray.
-2. **Settings Menu:** Double-click the tray icon (or right-click → Settings) to configure:
-   - Your secret global hotkey.
-   - Video Quality (`High / Medium / Low`).
-   - Frames Per Second (FPS).
-   - Mic boost.
-   - Developer logging.
+**Settings Configuration**
+Double-click the tray icon to open the configuration window. Available settings include:
+*   Customizing the global shortcut key and modifiers.
+*   Video quality presets (High, Medium, Low) and capture framerate (15, 30, 60 FPS).
+*   Microphone toggle, volume multiplier, and live test levels.
+*   Enabling or disabling Developer logging.
 
 <p align="center">
-  <img src="readme/settings.png" alt="Settings Menu" width="500" />
+  <img src="readme/settings.png" alt="Settings Interface" width="500" />
 </p>
 
-3. **Start Recording:** Press your global hotkey. It will instantly start recording in the background. A stealthy "reminder" balloon will occasionally pop up just to let you know the system is alive.
-4. **Stop Recording:** Press your global hotkey again. You'll briefly see an indeterminate progress bar while the core system muxes your audio and video. 
-5. **Save:** A prompt will ask you to name the file (pre-populated with a second-precision timestamp to prevent collisions).
+**Recording Lifecycle**
+1.  Press the global hotkey to initiate capture. 
+2.  Press the hotkey again to stop. A progress window will indicate that the application is actively mixing the audio and video tracks. 
+3.  Once processing is complete, a prompt allows you to choose the final file name and save location.
 
----
-
-## 👨‍💻 Developer Mode
-
-If you're troubleshooting or curious about the FFmpeg pipelines:
-- Open Settings and enable **Developer Mode**.
-- The next time you press your shortcut, the **Broker Monitor** window will appear. 
-- It tracks FFmpeg pipeline status, live commands, and frame health at exactly 1 ping per second to prevent UI choking.
+If "Developer Mode" is enabled in settings, the Monitor Console will appear automatically when recording begins, displaying FFmpeg commands and a throttled activity heartbeat.
 
 <p align="center">
   <img src="readme/dev.png" alt="Developer Console" width="600" />
 </p>
 
----
+## Building from Source
 
-## 🏗️ Build from Source
-
-To compile this project yourself, you will need the [.NET 9.0 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/9.0) installed.
+To compile the application manually, the .NET 9.0 SDK is required.
 
 ```bash
-# Clone the repository
 git clone https://github.com/ajayraho/screenrec.git
 cd screenrec/ScreenRecApp
 
-# Publish as a self-contained ReadyToRun executable
 dotnet publish -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=true
 ```
 
-Then drop `ffmpeg.exe` next to the compiled `.exe` inside `bin/Release/net9.0-windows/win-x64/publish/`.
+Ensure `ffmpeg.exe` is placed in the output directory (`bin/Release/net9.0-windows/win-x64/publish/`) alongside the executable before running.
 
----
-
-*Note: This tool uses `gdigrab` to capture the desktop directly, meaning it bypasses most simple capture blocks but may still appear as a black screen when recording DRM-protected content (like Netflix/Hulu apps) due to hardware-level HDCP.*
-
----
-
-Made with ❤️ by Ajit K.
+*Note: Desktop capture relies on the gdigrab input device. Recording hardware-encrypted DRM streams (e.g., Netflix via Edge) may result in a black screen due to OS-level HDCP protections.*
