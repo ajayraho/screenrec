@@ -14,14 +14,12 @@ namespace ScreenRecApp
         private uint _tempVirtualKey;
         private string _tempDisplayText;
 
-        private WasapiCapture _testMicCapture;
-        private bool _isTestingMic = false;
-
         public SettingsWindow()
         {
             InitializeComponent();
             SavePathBox.Text = SettingsManager.Settings.SavePath;
             DevModeCheck.IsChecked = SettingsManager.Settings.DeveloperMode;
+            StartupCheck.IsChecked = App.IsStartupEnabled();
             
             _tempModifiers = SettingsManager.Settings.HotkeyModifiers;
             _tempVirtualKey = SettingsManager.Settings.HotkeyVirtualKey;
@@ -56,6 +54,8 @@ namespace ScreenRecApp
 
             MicBoostSlider.Value = SettingsManager.Settings.MicVolumeBoost;
             CaptureMicCheck.IsChecked = SettingsManager.Settings.CaptureMicAudio;
+            AudioSyncSlider.Value = SettingsManager.Settings.AudioSyncOffsetMs;
+            AudioSyncText.Text = $"{SettingsManager.Settings.AudioSyncOffsetMs} ms";
 
             _timer = new System.Windows.Threading.DispatcherTimer();
             _timer.Interval = System.TimeSpan.FromMilliseconds(500);
@@ -68,10 +68,7 @@ namespace ScreenRecApp
 
         private void SettingsWindow_Closed(object sender, EventArgs e)
         {
-            if (_isTestingMic)
-            {
-                try { _testMicCapture?.StopRecording(); _testMicCapture?.Dispose(); } catch { }
-            }
+            _timer.Stop();
         }
 
         private void Header_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -85,47 +82,10 @@ namespace ScreenRecApp
             this.Close();
         }
 
-        private void TestMic_Click(object sender, RoutedEventArgs e)
+        private void AudioSyncSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
-            if (_isTestingMic)
-            {
-                try { _testMicCapture?.StopRecording(); _testMicCapture?.Dispose(); } catch { }
-                TestMicButton.Content = "Test Mic";
-                MicLevelBar.Value = 0;
-                _isTestingMic = false;
-            }
-            else
-            {
-                try
-                {
-                    _testMicCapture = new WasapiCapture();
-                    _testMicCapture.DataAvailable += (s, a) =>
-                    {
-                        float max = 0;
-                        for (int index = 0; index < a.BytesRecorded; index += 4)
-                        {
-                            if (index + 4 <= a.Buffer.Length)
-                            {
-                                float sample = BitConverter.ToSingle(a.Buffer, index);
-                                if (sample < 0) sample = -sample;
-                                if (sample > max) max = sample;
-                            }
-                        }
-                        
-                        float visualMax = max * (float)MicBoostSlider.Value;
-                        if (visualMax > 1f) visualMax = 1f;
-
-                        Dispatcher.InvokeAsync(() => { MicLevelBar.Value = visualMax; });
-                    };
-                    _testMicCapture.StartRecording();
-                    TestMicButton.Content = "Stop Mic";
-                    _isTestingMic = true;
-                }
-                catch (Exception ex)
-                {
-                    System.Windows.MessageBox.Show("Could not start microphone test: " + ex.Message);
-                }
-            }
+            if (AudioSyncText != null)
+                AudioSyncText.Text = $"{(int)e.NewValue} ms";
         }
 
         private void MicBoostSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -193,12 +153,14 @@ namespace ScreenRecApp
 
             SettingsManager.Settings.SavePath = SavePathBox.Text;
             SettingsManager.Settings.DeveloperMode = DevModeCheck.IsChecked == true;
+            App.SetStartupEnabled(StartupCheck.IsChecked == true);
             SettingsManager.Settings.HotkeyModifiers = currentMods;
             SettingsManager.Settings.HotkeyVirtualKey = _tempVirtualKey;
             SettingsManager.Settings.HotkeyDisplayText = displayText;
             
             SettingsManager.Settings.MicVolumeBoost = Math.Round(MicBoostSlider.Value, 1);
             SettingsManager.Settings.CaptureMicAudio = CaptureMicCheck.IsChecked == true;
+            SettingsManager.Settings.AudioSyncOffsetMs = (int)AudioSyncSlider.Value;
 
             if (int.TryParse(TimerMinutesBox.Text, out int mins) && mins > 0)
                 SettingsManager.Settings.NotificationTimerMinutes = mins;

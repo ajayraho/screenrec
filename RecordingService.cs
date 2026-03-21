@@ -25,6 +25,13 @@ namespace ScreenRecApp
 
         public string TempFilePath => _tempFilePath;
 
+        // Sync tracking: NAudio starts immediately, FFmpeg takes 1-3s to init.
+        // We measure the exact moment FFmpeg actually starts capturing frames
+        // and trim that delta off the audio at mux time.
+        private DateTime _audioStartTime;
+        private DateTime _ffmpegFirstFrameTime;
+        private bool _firstFrameReceived;
+
         private string GetFFmpegPath()
         {
             // 1. Try App Directory
@@ -69,20 +76,24 @@ namespace ScreenRecApp
             _tempMicAudioPath = Path.Combine(tempDir, $"mic_{id}.wav");
             _finalTempPath = Path.Combine(tempDir, $"final_{id}.mp4");
 
-            // START NAUDIO CAPTURE (SYSTEM)
+            _firstFrameReceived = false;
+
+            // START NAUDIO IMMEDIATELY — audio begins capturing right away.
+            // We record the exact timestamp so we can trim the head at mux time.
             try
             {
                 _audioCapture = new WasapiLoopbackCapture();
                 _audioWriter = new WaveFileWriter(_tempAudioPath, _audioCapture.WaveFormat);
                 _audioCapture.DataAvailable += (s, a) => { _audioWriter.Write(a.Buffer, 0, a.BytesRecorded); };
                 _audioCapture.StartRecording();
+                _audioStartTime = DateTime.UtcNow;
             }
             catch (Exception ex)
             {
+                _audioStartTime = DateTime.UtcNow;
                 Logger.LogError(ex, "NAudio System Audio Start");
             }
 
-            // START NAUDIO CAPTURE (MIC)
             if (SettingsManager.Settings.CaptureMicAudio)
             {
                 try
@@ -98,13 +109,16 @@ namespace ScreenRecApp
                 }
             }
 
+            // Log audio start time for dev mode visibility
+            if (SettingsManager.Settings.DeveloperMode)
+                Logger.Log($"[Sync] Audio capture started at {_audioStartTime:HH:mm:ss.fff} UTC");
+
             int fps = SettingsManager.Settings.FramesPerSecond;
             string qualityArg = "-preset ultrafast";
             if (SettingsManager.Settings.VideoQuality == "High") qualityArg = "-preset fast -crf 23";
             else if (SettingsManager.Settings.VideoQuality == "Medium") qualityArg = "-preset veryfast -crf 28";
             else qualityArg = "-preset ultrafast -crf 32";
 
-            // START VIDEO RECORDING
             var startInfo = new ProcessStartInfo
             {
                 FileName = GetFFmpegPath(),
@@ -121,28 +135,38 @@ namespace ScreenRecApp
                 _ffmpegProcess.EnableRaisingEvents = true;
 
                 if (App._devWindow != null)
-                {
                     App._devWindow.ReportCommand(startInfo.FileName + " " + startInfo.Arguments);
-                }
 
                 int frameLogCounter = 0;
-                _ffmpegProcess.ErrorDataReceived += (s, e) => { 
+                _ffmpegProcess.ErrorDataReceived += (s, e) => 
+                { 
                     if (!string.IsNullOrWhiteSpace(e.Data)) 
                     {
-                        // FFmpeg spams 'frame=' stats multiple times a second. We drop these 
-                        // to save massive amounts of CPU, Disk I/O, and UI Dispatcher flooding
-                        if (!e.Data.StartsWith("frame=") && !e.Data.StartsWith("size="))
+                        // FFmpeg on Windows uses \r to overwrite the progress line in-place.
+                        // ErrorDataReceived splits on \n but the data still has a leading \r.
+                        // We must trim it before checking the content — this was the root bug.
+                        string line = e.Data.TrimStart('\r', ' ');
+
+                        // Capture the timestamp of the very first frame from gdigrab.
+                        if (!_firstFrameReceived && (line.StartsWith("frame=") || line.StartsWith("size=")))
+                        {
+                            _ffmpegFirstFrameTime = DateTime.UtcNow;
+                            _firstFrameReceived = true;
+                            double lag = (_ffmpegFirstFrameTime - _audioStartTime).TotalSeconds;
+                            Logger.Log($"[Sync] Video capture started at {_ffmpegFirstFrameTime:HH:mm:ss.fff} UTC");
+                            Logger.Log($"[Sync] Audio lead: {lag:F3}s  --  this will be trimmed at mux.");
+                        }
+
+                        if (!line.StartsWith("frame=") && !line.StartsWith("size="))
                         {
                             if (SettingsManager.Settings.DeveloperMode)
-                                Logger.Log($"[FFmpeg Video]: {e.Data}"); 
+                                Logger.Log($"[FFmpeg]: {line}"); 
                         }
                         else if (SettingsManager.Settings.DeveloperMode)
                         {
                             frameLogCounter++;
-                            if (frameLogCounter % 30 == 0) // Roughly once per second (at 30fps)
-                            {
+                            if (frameLogCounter % 30 == 0)
                                 Logger.Log("Recording in progress...");
-                            }
                         }
                     }
                 };
@@ -234,22 +258,43 @@ namespace ScreenRecApp
                     string volFilter = boost != 1.0 ? $"volume={boost.ToString(System.Globalization.CultureInfo.InvariantCulture)}" : "volume=1.0";
                     string muxArgs = "";
 
+                // SYNC COMPUTATION:
+                // Auto-detected: delta between NAudio start and FFmpeg first frame.
+                // Manual: user-configured offset from Settings (positive = audio was early).
+                double autoTrimSeconds = 0;
+                if (_firstFrameReceived && _ffmpegFirstFrameTime > _audioStartTime)
+                    autoTrimSeconds = (_ffmpegFirstFrameTime - _audioStartTime).TotalSeconds;
+
+                double manualTrimSeconds = SettingsManager.Settings.AudioSyncOffsetMs / 1000.0;
+                double totalTrimSeconds = autoTrimSeconds + manualTrimSeconds;
+
+                Logger.Log($"[Sync] Auto trim: {autoTrimSeconds:F3}s | Manual offset: {manualTrimSeconds:F3}s | Applied: {totalTrimSeconds:F3}s");
+
+                // Positive total = audio started too early → trim audio head with -ss
+                // Negative total = audio started too late → delay audio with -itsoffset 
+                string audioTrim = "";
+                if (totalTrimSeconds > 0.02)
+                    audioTrim = $"-ss {totalTrimSeconds.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)} ";
+                else if (totalTrimSeconds < -0.02)
+                    audioTrim = $"-itsoffset {Math.Abs(totalTrimSeconds).ToString("F3", System.Globalization.CultureInfo.InvariantCulture)} ";
+
                     if (sysExists && micExists)
                     {
-                        muxArgs = $"-y -i \"{_tempFilePath}\" -i \"{_tempAudioPath}\" -i \"{_tempMicAudioPath}\" -filter_complex \"[2:a]{volFilter}[mic_boost];[1:a][mic_boost]amix=inputs=2:duration=longest[a]\" -map 0:v -map \"[a]\" -c:v copy -c:a aac -b:a 192k -movflags +faststart \"{_finalTempPath}\"";
+                        muxArgs = $"-y -i \"{_tempFilePath}\" {audioTrim}-i \"{_tempAudioPath}\" {audioTrim}-i \"{_tempMicAudioPath}\" -filter_complex \"[2:a]{volFilter}[mic_boost];[1:a][mic_boost]amix=inputs=2:duration=longest[a]\" -map 0:v -map \"[a]\" -c:v copy -c:a aac -b:a 192k -movflags +faststart \"{_finalTempPath}\"";
                     }
                     else if (sysExists)
                     {
-                        muxArgs = $"-y -i \"{_tempFilePath}\" -i \"{_tempAudioPath}\" -c:v copy -c:a aac -b:a 192k -movflags +faststart \"{_finalTempPath}\"";
+                        muxArgs = $"-y -i \"{_tempFilePath}\" {audioTrim}-i \"{_tempAudioPath}\" -c:v copy -c:a aac -b:a 192k -movflags +faststart \"{_finalTempPath}\"";
                     }
                     else if (micExists)
                     {
-                        muxArgs = $"-y -i \"{_tempFilePath}\" -i \"{_tempMicAudioPath}\" -filter_complex \"[1:a]{volFilter}[a]\" -map 0:v -map \"[a]\" -c:v copy -c:a aac -b:a 192k -movflags +faststart \"{_finalTempPath}\"";
+                        muxArgs = $"-y -i \"{_tempFilePath}\" {audioTrim}-i \"{_tempMicAudioPath}\" -filter_complex \"[1:a]{volFilter}[a]\" -map 0:v -map \"[a]\" -c:v copy -c:a aac -b:a 192k -movflags +faststart \"{_finalTempPath}\"";
                     }
                     else
                     {
                         File.Copy(_tempFilePath, _finalTempPath, true);
                     }
+
 
                     if (!string.IsNullOrEmpty(muxArgs))
                     {

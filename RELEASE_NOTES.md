@@ -24,9 +24,11 @@ This document outlines the complete transition of ScreenRecApp into a silent, ro
 
 ### Audio Pipeline Enhancements
 - **Discretionary Microphone Capture:** A setting has been introduced allowing users to explicitly toggle microphone capture on or off independently from system playback.
-- **Live Output Tester:** Included a live audio-level meter inside the settings screen to verify microphone capture devices prior to recording.
+- **Frame-Perfect Audio/Video Sync:** Re-engineered the synchronization pipeline to calculate precise timestamp deltas between the first video frame and the audio stream. Added a manual "Audio Sync" offset slider in settings for fine-tuning.
 - **Dynamic Volume Adjustment:** Features an internal multiplier filter for mixing quiet microphones alongside loud desktop playback streams.
 
 ### End-User Features
 - **Key Binding:** Removed static shortcut logic in favor of an interactive key listener menu. The global hook utilizes lightweight window sourcing (HwndSource) to prevent blocking conflicts with other key loggers and games.
 - **File Naming Logic:** The default naming convention now utilizes a rigid `DD.MM.YY_HH.MM.SS_` fallback to eliminate multi-session overwriting.
+- **Auto-Focused Naming:** The filename input box is automatically selected upon finishing a recording, allowing absolute immediate typing.
+- **Tray Controls & Startup:** Added a dynamic right-click "Stop Recording" context menu to the tray icon and a native "Start with Windows" registry toggle. Hovering over the tray icon while recording now displays a live elapsed timer.

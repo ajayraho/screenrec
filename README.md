@@ -33,7 +33,8 @@ Upon starting, the application runs silently in the system tray.
 Double-click the tray icon to open the configuration window. Available settings include:
 *   Customizing the global shortcut key and modifiers.
 *   Video quality presets (High, Medium, Low) and capture framerate (15, 30, 60 FPS).
-*   Microphone toggle, volume multiplier, and live test levels.
+*   Microphone toggle and volume multiplier.
+*   Audio sync calibration slider and 'Start with Windows' toggle.
 *   Enabling or disabling Developer logging.
 
 <p align="center">
@@ -42,8 +43,9 @@ Double-click the tray icon to open the configuration window. Available settings 
 
 **Recording Lifecycle**
 1.  Press the global hotkey to initiate capture. 
-2.  Press the hotkey again to stop. A progress window will indicate that the application is actively mixing the audio and video tracks. 
-3.  Once processing is complete, a prompt allows you to choose the final file name and save location.
+2.  While recording, hovering over the tray icon will display the live elapsed time.
+3.  Press the hotkey again (or right-click the tray icon and select "Stop Recording") to stop. A progress window will indicate that the application is actively mixing the audio and video tracks. 
+4.  Once processing is complete, a prompt allows you to choose the final file name (auto-focused for immediate typing) and save location.
 
 If "Developer Mode" is enabled in settings, the Monitor Console will appear automatically when recording begins, displaying FFmpeg commands and a throttled activity heartbeat.
 

@@ -23,6 +23,7 @@ namespace ScreenRecApp
         
         public double MicVolumeBoost { get; set; } = 1.0; // 1.0 = 100%
         public bool CaptureMicAudio { get; set; } = true;
+        public int AudioSyncOffsetMs { get; set; } = -900; // ms to trim from audio head. Positive if audio is early.
     }
 
     public static class SettingsManager

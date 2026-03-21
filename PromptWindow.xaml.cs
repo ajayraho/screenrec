@@ -13,6 +13,13 @@ namespace ScreenRecApp
             InitializeComponent();
             TimestampBox.Text = System.DateTime.Now.ToString("dd.MM.yy_HH.mm.ss_");
             LoadSuggestions();
+            Loaded += (s, e) =>
+            {
+                // Focus the name field so the user can start typing immediately
+                NameComboBox.Focus();
+                var textBox = NameComboBox.Template?.FindName("PART_EditableTextBox", NameComboBox) as System.Windows.Controls.TextBox;
+                textBox?.SelectAll();
+            };
         }
 
         private void LoadSuggestions()

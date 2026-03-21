@@ -14,10 +14,14 @@ namespace ScreenRecApp
         private GlobalHotkeyService _hotkeyService;
         public static RecordingService CurrentRecordingService { get; private set; }
         private System.Windows.Forms.Timer _notificationTimer;
+        private System.Windows.Forms.Timer _trayTooltipTimer;  // updates tray text while recording
+        private DateTime _recordingStartedAt;
         public static DevWindow _devWindow;
 
         private static System.Threading.Mutex? _mutex = null;
         private SettingsWindow? _settingsWindow = null;
+
+        private ToolStripMenuItem _stopRecordingMenuItem;
 
         private void OpenSettings()
         {
@@ -72,6 +76,10 @@ namespace ScreenRecApp
             _notifyIcon.Text = "Sound Service Broker";
 
             var contextMenu = new System.Windows.Forms.ContextMenuStrip();
+            _stopRecordingMenuItem = new ToolStripMenuItem("Stop Recording", null, async (s, ev) => await TriggerStopRecording());
+            _stopRecordingMenuItem.Visible = false; // hidden until recording starts
+            contextMenu.Items.Add(_stopRecordingMenuItem);
+            contextMenu.Items.Add(new ToolStripSeparator());
             contextMenu.Items.Add("Settings", null, (s, ev) => OpenSettings());
             contextMenu.Items.Add("Exit", null, (s, ev) => Shutdown());
             _notifyIcon.ContextMenuStrip = contextMenu;
@@ -90,8 +98,24 @@ namespace ScreenRecApp
             }
 
             _notificationTimer = new System.Windows.Forms.Timer();
-            _notificationTimer.Interval = 30 * 60 * 1000; // 30 mins
+            _notificationTimer.Interval = 30 * 60 * 1000;
             _notificationTimer.Tick += OnNotificationTimerTick;
+
+            // Tooltip updater — fires every second while recording to show elapsed time
+            _trayTooltipTimer = new System.Windows.Forms.Timer();
+            _trayTooltipTimer.Interval = 1000;
+            _trayTooltipTimer.Tick += (s, ev) =>
+            {
+                if (CurrentRecordingService?.IsRecording == true)
+                {
+                    var elapsed = DateTime.UtcNow - _recordingStartedAt;
+                    string ts = elapsed.ToString(@"hh\:mm\:ss");
+                    // NotifyIcon.Text has a 63-char limit on Windows
+                    string text = $"Recording active — {ts}";
+                    if (text.Length > 63) text = text[..63];
+                    _notifyIcon.Text = text;
+                }
+            };
         }
 
         public static void UpdateGlobalHotkey()
@@ -104,6 +128,88 @@ namespace ScreenRecApp
             }
         }
 
+        // ── Startup with Windows ──────────────────────────────────────────────
+        private const string RunKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+        private const string AppRegName = "SoundServiceBroker";
+
+        public static bool IsStartupEnabled()
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey, false);
+            return key?.GetValue(AppRegName) != null;
+        }
+
+        public static void SetStartupEnabled(bool enable)
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey, true);
+            if (key == null) return;
+            if (enable)
+            {
+                string exePath = System.Reflection.Assembly.GetExecutingAssembly().Location
+                    .Replace(".dll", ".exe"); // handles self-contained publish path
+                key.SetValue(AppRegName, $"\"{exePath}\"");
+                Logger.Log("Startup with Windows: enabled.");
+            }
+            else
+            {
+                key.DeleteValue(AppRegName, false);
+                Logger.Log("Startup with Windows: disabled.");
+            }
+        }
+
+        // Shared stop logic — used by both the hotkey and the tray Stop button
+        private async Task TriggerStopRecording()
+        {
+            if (!CurrentRecordingService.IsRecording) return;
+
+            _notificationTimer.Stop();
+            _trayTooltipTimer.Stop();
+            _stopRecordingMenuItem.Visible = false;
+
+            LoaderWindow loader = new LoaderWindow();
+            loader.Show();
+
+            string tempFilePath = await CurrentRecordingService.StopRecording();
+            Logger.Log($"Stopped recording. Temp path: {tempFilePath}");
+            _devWindow?.SetRecordingState(false);
+            _notifyIcon.Text = "Sound Service Broker";
+
+            loader.Close();
+
+            if (!string.IsNullOrEmpty(tempFilePath) && File.Exists(tempFilePath))
+            {
+                PromptWindow prompt = new PromptWindow();
+                bool? result = prompt.ShowDialog();
+
+                if (result == true)
+                {
+                    string finalName = string.IsNullOrEmpty(prompt.ResultName) ? "untitled" : prompt.ResultName;
+                    string finalTimestamp = string.IsNullOrEmpty(prompt.ResultTimestamp) ? DateTime.Now.ToString("dd.MM.yy_HH.mm.ss_") : prompt.ResultTimestamp;
+
+                    string targetDir = SettingsManager.Settings.SavePath;
+                    if (!Directory.Exists(targetDir)) Directory.CreateDirectory(targetDir);
+
+                    string targetFile = Path.Combine(targetDir, finalTimestamp + finalName + ".mp4");
+                    try
+                    {
+                        File.Move(tempFilePath, targetFile, true);
+                        Logger.Log($"File successfully saved to {targetFile}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, "File Move");
+                    }
+                }
+                else
+                {
+                    try { File.Delete(tempFilePath); Logger.Log("User cancelled save. Temp file deleted."); } catch { }
+                }
+            }
+            else
+            {
+                Logger.Log("Temp file not found after recording stopped.");
+            }
+        }
+
         private async void OnHotkeyPressed(object sender, EventArgs e)
         {
             try
@@ -111,66 +217,14 @@ namespace ScreenRecApp
                 Logger.Log($"Hotkey pressed. Processing... Current Recording State: {CurrentRecordingService?.IsRecording}");
                 if (CurrentRecordingService.IsRecording)
                 {
-                    // Stop Recording
-                    _notificationTimer.Stop();
-
-                    LoaderWindow loader = new LoaderWindow();
-                    loader.Show();
-
-                    string tempFilePath = await CurrentRecordingService.StopRecording();
-                    Logger.Log($"Stopped recording. Temp path: {tempFilePath}");
-                    _devWindow?.SetRecordingState(false);
-                    _notifyIcon.Text = "Sound Service Broker";
-
-                    loader.Close();
-
-                    // Ensure file exists
-                    if (!string.IsNullOrEmpty(tempFilePath) && File.Exists(tempFilePath))
-                    {
-                        PromptWindow prompt = new PromptWindow();
-                        bool? result = prompt.ShowDialog();
-                        
-                        if (result == true)
-                        {
-                            string finalName = string.IsNullOrEmpty(prompt.ResultName) ? "untitled" : prompt.ResultName;
-                            string finalTimestamp = string.IsNullOrEmpty(prompt.ResultTimestamp) ? DateTime.Now.ToString("dd.MM.yy_HH.mm.ss_") : prompt.ResultTimestamp;
-
-                            string targetDir = SettingsManager.Settings.SavePath;
-                            if (!Directory.Exists(targetDir)) Directory.CreateDirectory(targetDir);
-
-                            string targetFile = Path.Combine(targetDir, finalTimestamp + finalName + ".mp4");
-
-                            try
-                            {
-                                File.Move(tempFilePath, targetFile, true);
-                                Logger.Log($"File successfully saved to {targetFile}");
-                            }
-                            catch (Exception ex)
-                            {
-                                Logger.LogError(ex, "File Move");
-                            }
-                        }
-                        else
-                        {
-                            try 
-                            { 
-                                File.Delete(tempFilePath); 
-                                Logger.Log("User cancelled save prompt. Temp file deleted."); 
-                            } 
-                            catch { }
-                        }
-                    }
-                    else
-                    {
-                        Logger.Log("Temp file not found after recording stopped.");
-                    }
+                    await TriggerStopRecording();
                 }
                 else
                 {
-                    // Start Recording - run on background thread so audio device 
+                    // Start Recording - run on background thread so audio device
                     // init (WasapiCapture) never blocks the UI thread
                     Logger.Log("Attempting to start recording...");
-                    
+
                     if (SettingsManager.Settings.DeveloperMode && _devWindow == null)
                     {
                         _devWindow = new DevWindow();
@@ -184,7 +238,9 @@ namespace ScreenRecApp
                     {
                         Logger.Log("Recording started successfully.");
                         _devWindow?.SetRecordingState(true);
-                        _notifyIcon.Text = "Sound Service Broker";
+                        _recordingStartedAt = DateTime.UtcNow;
+                        _trayTooltipTimer.Start();
+                        _stopRecordingMenuItem.Visible = true;
                         _notificationTimer.Interval = SettingsManager.Settings.NotificationTimerMinutes * 60 * 1000;
                         _notificationTimer.Start();
                     }
@@ -215,6 +271,7 @@ namespace ScreenRecApp
             _hotkeyService?.Dispose();
             _notifyIcon?.Dispose();
             _notificationTimer?.Dispose();
+            _trayTooltipTimer?.Dispose();
 
             try { _mutex?.ReleaseMutex(); _mutex?.Dispose(); } catch { }
         }

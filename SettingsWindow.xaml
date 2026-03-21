@@ -67,6 +67,7 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
                 <TextBlock Grid.Row="0" Text="Save Location Directory:" FontSize="13" Foreground="#a6adc8" Margin="0,0,0,5" />
@@ -138,32 +139,48 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="65" />
                     </Grid.ColumnDefinitions>
                     
                     <TextBlock Text="Mic Boost:" FontSize="13" Foreground="#a6adc8" VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <Slider x:Name="MicBoostSlider" Grid.Column="1" Minimum="1" Maximum="10" TickFrequency="0.5" IsSnapToTickEnabled="True"
                             VerticalAlignment="Center" Margin="0,0,10,0" ValueChanged="MicBoostSlider_ValueChanged" />
-                    <TextBlock x:Name="MicBoostText" Grid.Column="2" Text="1.0x" FontSize="13" Width="40" VerticalAlignment="Center" Margin="0,0,15,0"/>
-
-                    <Button x:Name="TestMicButton" Grid.Column="3" Content="Test" Height="28" Width="50" Margin="0,0,10,0"
-                            Background="#313244" Foreground="#cdd6f4" BorderThickness="0" Click="TestMic_Click" />
-                    <ProgressBar x:Name="MicLevelBar" Grid.Column="4" Height="10" Minimum="0" Maximum="1" 
-                                 Background="#11111b" Foreground="#a6e3a1" BorderThickness="0" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="MicBoostText" Grid.Column="2" Text="1.0x" FontSize="13" VerticalAlignment="Center" Foreground="#f9e2af"/>
                 </Grid>
 
                 <StackPanel Grid.Row="6" Margin="0,20,0,0">
                     <CheckBox x:Name="CaptureMicCheck" Content="Capture Microphone Audio" Foreground="#cdd6f4" FontWeight="Medium" VerticalAlignment="Center" FontSize="13" />
                 </StackPanel>
 
-                <StackPanel Grid.Row="7" Margin="0,20,0,0">
+                <StackPanel Grid.Row="7" Margin="0,15,0,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="65" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Audio Sync:" FontSize="13" Foreground="#a6adc8" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <Slider x:Name="AudioSyncSlider" Grid.Column="1" Minimum="-2000" Maximum="5000" TickFrequency="50" IsSnapToTickEnabled="True"
+                                VerticalAlignment="Center" Margin="0,0,10,0" ValueChanged="AudioSyncSlider_ValueChanged" />
+                        <TextBlock x:Name="AudioSyncText" Grid.Column="2" Text="0 ms" FontSize="12" Foreground="#f9e2af" VerticalAlignment="Center" />
+                    </Grid>
+                    <TextBlock FontSize="11" Foreground="#585b70" Margin="0,5,0,0" TextWrapping="Wrap">
+                        <Run Text="Positive"/>
+                        <Run Text=" (e.g. +2500 ms) — audio was captured too early; trims that many milliseconds from the audio head to re-align it with the video.   "/>
+                        <Run Text="Negative"/>
+                        <Run Text=" (e.g. -500 ms) — audio started late; pads the audio with silence to delay it further."/>
+                    </TextBlock>
+                </StackPanel>
+
+                <StackPanel Grid.Row="8" Margin="0,20,0,0">
                     <TextBlock x:Name="StatusText" Text="Status: Idle" FontSize="14" FontWeight="SemiBold" Foreground="#a6e3a1" Margin="0"/>
                 </StackPanel>
 
-                <Grid Grid.Row="8" Margin="0,25,0,0">
-                    <CheckBox x:Name="DevModeCheck" Content="Dev Data" Foreground="#6c7086" VerticalAlignment="Center" HorizontalAlignment="Left" />
+                <Grid Grid.Row="9" Margin="0,25,0,0">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                        <CheckBox x:Name="DevModeCheck" Content="Dev Mode" Foreground="#6c7086" VerticalAlignment="Center" />
+                        <CheckBox x:Name="StartupCheck" Content="Start with Windows" Foreground="#6c7086" VerticalAlignment="Center" Margin="20,0,0,0" />
+                    </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                         <Button Content="Cancel" Width="80" Height="35" Click="Close_Click" Margin="0,0,10,0"
                                 Background="#313244" Foreground="#cdd6f4" FontWeight="SemiBold" BorderThickness="0" Cursor="Hand"/>
