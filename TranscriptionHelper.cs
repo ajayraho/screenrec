@@ -4,14 +4,21 @@ using System.Threading.Tasks;
 using System.Diagnostics;
 using System.Text;
 using System.Collections.Generic;
+using System.Linq;
 using Whisper.net;
 using Whisper.net.Ggml;
 
 namespace ScreenRecApp
 {
+    public class TaggedSegment
+    {
+        public SegmentData Segment { get; set; }
+        public string Source { get; set; }
+    }
+
     public static class TranscriptionHelper
     {
-        public static async Task<string> GenerateTranscriptionsAsync(string mp4Path, string rawWavPath = null, LoaderWindow loader = null, System.Threading.CancellationToken ct = default)
+        public static async Task<string> GenerateTranscriptionsAsync(string mp4Path, string micWavPath = null, string sysWavPath = null, LoaderWindow loader = null, System.Threading.CancellationToken ct = default)
         {
             if (!SettingsManager.Settings.GenerateSubtitles && !SettingsManager.Settings.GenerateTranscript && !SettingsManager.Settings.GenerateSummary)
                 return "";
@@ -28,41 +35,18 @@ namespace ScreenRecApp
 
             Logger.Log($"Starting AI Transcription with model: {Path.GetFileName(modelPath)}");
             
-            string ffmpegPath = RecordingService.GetFFmpegPath();
-            // Always produce a clean 16kHz/mono/PCM-16 temp WAV for Whisper.
-            // Whisper.net's WaveParser rejects anything that isn't exactly this format.
-            string whisperWavPath = mp4Path.Replace(".mp4", "_whisper.wav");
+            // Collect audio sources to transcribe
+            var sources = new List<(string Name, string Path)>();
+            if (!string.IsNullOrEmpty(micWavPath) && File.Exists(micWavPath))
+                sources.Add(("Mic", micWavPath));
+            if (!string.IsNullOrEmpty(sysWavPath) && File.Exists(sysWavPath))
+                sources.Add(("System", sysWavPath));
 
-            // Source priority: raw mic WAV → raw sys WAV → extract from final MP4
-            string sourceForWhisper = (!string.IsNullOrEmpty(rawWavPath) && File.Exists(rawWavPath))
-                ? rawWavPath
-                : mp4Path;
+            // Fallback: extract from video if no raw audio available
+            if (sources.Count == 0)
+                sources.Add(("Mixed", mp4Path));
 
-            Logger.Log($"[Transcription] resampling '{Path.GetFileName(sourceForWhisper)}' → 16kHz mono PCM");
-
-            using (var process = new Process())
-            {
-                process.StartInfo.FileName = ffmpegPath;
-                // -vn skips video (safe for both WAV and MP4 sources)
-                process.StartInfo.Arguments = $"-y -i \"{sourceForWhisper}\" -vn -ar 16000 -ac 1 -c:a pcm_s16le \"{whisperWavPath}\"";
-                process.StartInfo.CreateNoWindow = true;
-                process.StartInfo.UseShellExecute = false;
-                process.Start();
-                try {
-                    await process.WaitForExitAsync(ct);
-                } catch (OperationCanceledException) {
-                    if (!process.HasExited) process.Kill();
-                    return "";
-                }
-            }
-
-            string wavPath = whisperWavPath;
-
-            if (!File.Exists(wavPath))
-            {
-                Logger.Log("Transcription Error: Failed to extract WAV.");
-                return "";
-            }
+            var tempWavPathsToClean = new List<string>();
 
             string resultText = "";
             try
@@ -95,8 +79,7 @@ namespace ScreenRecApp
                 Logger.Log("[Transcription] in progress...");
                 using var processor = builder.Build();
 
-                var segments = new List<SegmentData>();
-                var fullText = new StringBuilder();
+                var taggedSegments = new List<TaggedSegment>();
 
                 // Whisper emits these special tokens when it refuses to transcribe a segment.
                 // We must filter them out entirely — they are NOT real transcript content.
@@ -107,28 +90,62 @@ namespace ScreenRecApp
                     "(non-english speech)", "(music)", "(applause)"
                 };
 
-                using (var fileStream = File.OpenRead(wavPath))
+                foreach (var source in sources)
                 {
-                    string lastAddedText = "";
-                    await foreach (var segment in processor.ProcessAsync(fileStream, ct))
+                    string tempWav = mp4Path.Replace(".mp4", $"_{source.Name}_whisper.wav");
+                    tempWavPathsToClean.Add(tempWav);
+
+                    Logger.Log($"[Transcription] Resampling {source.Name} audio '{Path.GetFileName(source.Path)}' → 16kHz mono PCM");
+
+                    // Resample to exact 16kHz mono PCM
+                    using (var process = new Process())
                     {
-                        string rawText = segment.Text.Trim();
-                        if (string.IsNullOrWhiteSpace(rawText)) continue;
-
-                        // Drop Whisper hallucination placeholder tokens
-                        if (hallucinationTokens.Contains(rawText)) continue;
-                        // Also drop tokens wrapped in brackets/parens dynamically
-                        if (rawText.StartsWith("[") && rawText.EndsWith("]")) continue;
-                        if (rawText.StartsWith("(") && rawText.EndsWith(")")) continue;
-
-                        // Drop exact/trailing duplicates (silence loop defence)
-                        if (rawText == lastAddedText) continue;
-                        if (rawText.Length > 15 && lastAddedText.EndsWith(rawText)) continue;
-
-                        segments.Add(segment);
-                        fullText.AppendLine(rawText);
-                        lastAddedText = rawText;
+                        process.StartInfo.FileName = RecordingService.GetFFmpegPath();
+                        process.StartInfo.Arguments = $"-y -i \"{source.Path}\" -vn -ar 16000 -ac 1 -c:a pcm_s16le \"{tempWav}\"";
+                        process.StartInfo.CreateNoWindow = true;
+                        process.StartInfo.UseShellExecute = false;
+                        process.Start();
+                        try {
+                            await process.WaitForExitAsync(ct);
+                        } catch (OperationCanceledException) {
+                            if (!process.HasExited) process.Kill();
+                            return "";
+                        }
                     }
+
+                    if (!File.Exists(tempWav)) continue;
+
+                    Logger.Log($"[Transcription] Transcribing {source.Name} audio...");
+
+                    using (var fileStream = File.OpenRead(tempWav))
+                    {
+                        string lastAddedText = "";
+                        await foreach (var segment in processor.ProcessAsync(fileStream, ct))
+                        {
+                            string rawText = segment.Text.Trim();
+                            if (string.IsNullOrWhiteSpace(rawText)) continue;
+
+                            // Drop Whisper hallucination placeholder tokens
+                            if (hallucinationTokens.Contains(rawText)) continue;
+                            if (rawText.StartsWith("[") && rawText.EndsWith("]")) continue;
+                            if (rawText.StartsWith("(") && rawText.EndsWith(")")) continue;
+
+                            // Drop exact/trailing duplicates
+                            if (rawText == lastAddedText) continue;
+                            if (rawText.Length > 15 && lastAddedText.EndsWith(rawText)) continue;
+
+                            taggedSegments.Add(new TaggedSegment { Segment = segment, Source = source.Name });
+                            lastAddedText = rawText;
+                        }
+                    }
+                }
+
+                // Chronological merge of all segments from both mic and system audio
+                var sortedSegments = taggedSegments.OrderBy(s => s.Segment.Start).ToList();
+                var fullText = new StringBuilder();
+                foreach (var ts in sortedSegments)
+                {
+                    fullText.AppendLine($"{ts.Segment.Text.Trim()}");
                 }
                 
                 resultText = fullText.ToString();
@@ -146,12 +163,12 @@ namespace ScreenRecApp
                 {
                     string srtPath = mp4Path.Replace(".mp4", ".srt");
                     using var writer = new StreamWriter(srtPath, false, Encoding.UTF8);
-                    for (int i = 0; i < segments.Count; i++)
+                    for (int i = 0; i < sortedSegments.Count; i++)
                     {
-                        var s = segments[i];
+                        var ts = sortedSegments[i];
                         writer.WriteLine(i + 1);
-                        writer.WriteLine($"{FormatTime(s.Start)} --> {FormatTime(s.End)}");
-                        writer.WriteLine(s.Text.Trim());
+                        writer.WriteLine($"{FormatTime(ts.Segment.Start)} --> {FormatTime(ts.Segment.End)}");
+                        writer.WriteLine($"{ts.Segment.Text.Trim()}");
                         writer.WriteLine();
                     }
                     Logger.Log($"Subtitles saved to {Path.GetFileName(srtPath)}");
@@ -168,8 +185,11 @@ namespace ScreenRecApp
             }
             finally
             {
-                // Always delete the resampled temp WAV we created for Whisper
-                try { File.Delete(wavPath); } catch { }
+                // Delete ALL temporary downsampled Whisper WAVs
+                foreach (string tmpPath in tempWavPathsToClean)
+                {
+                    try { File.Delete(tmpPath); } catch { }
+                }
             }
             
             return resultText;

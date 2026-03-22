@@ -381,40 +381,7 @@ namespace ScreenRecApp
                         loader.ShowCancelAction(true);
                     }
 
-                    // For transcription: when both streams exist, mix them so both the speaker's voice
-                    // AND system audio (e.g. a video playing on screen) are captured.
-                    // When only one exists, use whichever is available.
-                    string transcriptionSourceWav = null;
-                    if (savedMicPath != null && File.Exists(savedMicPath) &&
-                        savedSysPath != null && File.Exists(savedSysPath))
-                    {
-                        // Mix raw mic + sys WAVs into a single temp WAV for Whisper
-                        string mixedWav = Path.Combine(Path.GetTempPath(), "ScreenRecApp", $"mix_{Guid.NewGuid()}.wav");
-                        using (var mixProc = new Process())
-                        {
-                            mixProc.StartInfo.FileName = GetFFmpegPath();
-                            // Apply the same apad fix for transcription mix to ensure sys audio isn't cut short
-                            mixProc.StartInfo.Arguments = $"-y -i \"{savedSysPath}\" -i \"{savedMicPath}\" -filter_complex \"[0:a]apad[sys_full];[1:a][sys_full]amix=inputs=2:duration=first:normalize=0[a]\" -map \"[a]\" \"{mixedWav}\"";
-                            mixProc.StartInfo.CreateNoWindow = true;
-                            mixProc.StartInfo.UseShellExecute = false;
-                            mixProc.Start();
-                            await Task.Run(() => mixProc.WaitForExit(30000));
-                        }
-                        transcriptionSourceWav = File.Exists(mixedWav) ? mixedWav : savedMicPath;
-                        Logger.Log($"[Transcription] Using mixed sys+mic WAV");
-                    }
-                    else if (savedMicPath != null && File.Exists(savedMicPath))
-                    {
-                        transcriptionSourceWav = savedMicPath;
-                        Logger.Log($"[Transcription] Using mic-only WAV");
-                    }
-                    else if (savedSysPath != null && File.Exists(savedSysPath))
-                    {
-                        transcriptionSourceWav = savedSysPath;
-                        Logger.Log($"[Transcription] Using sys-only WAV");
-                    }
-
-                    string transcriptText = await TranscriptionHelper.GenerateTranscriptionsAsync(_finalTempPath, transcriptionSourceWav, loader, cts.Token);
+                    string transcriptText = await TranscriptionHelper.GenerateTranscriptionsAsync(_finalTempPath, savedMicPath, savedSysPath, loader, cts.Token);
                     
                     if (loader != null && !cts.IsCancellationRequested && !string.IsNullOrWhiteSpace(transcriptText))
                     {
