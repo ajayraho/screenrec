@@ -32,7 +32,7 @@ namespace ScreenRecApp
         private DateTime _ffmpegFirstFrameTime;
         private bool _firstFrameReceived;
 
-        private string GetFFmpegPath()
+        public static string GetFFmpegPath()
         {
             // 1. Try App Directory
             string exeDir = AppDomain.CurrentDomain.BaseDirectory;
@@ -183,9 +183,18 @@ namespace ScreenRecApp
             }
         }
 
-        public async Task<string> StopRecording()
+        public async Task<string> StopRecording(LoaderWindow loader = null)
         {
             if (!IsRecording) return null;
+
+            using var cts = new System.Threading.CancellationTokenSource();
+            if (loader != null)
+            {
+                loader.UpdateStatus("Optimizing video...");
+                loader.CancelAIRequested += () => {
+                    try { cts.Cancel(); } catch {}
+                };
+            }
 
             try
             {
@@ -280,7 +289,29 @@ namespace ScreenRecApp
 
                     if (sysExists && micExists)
                     {
-                        muxArgs = $"-y -i \"{_tempFilePath}\" {audioTrim}-i \"{_tempAudioPath}\" {audioTrim}-i \"{_tempMicAudioPath}\" -filter_complex \"[2:a]{volFilter}[mic_boost];[1:a][mic_boost]amix=inputs=2:duration=longest[a]\" -map 0:v -map \"[a]\" -c:v copy -c:a aac -b:a 192k -movflags +faststart \"{_finalTempPath}\"";
+                        // Apply trim inside filter_complex per-stream to avoid -itsoffset global stacking bug.
+                        // When trim is negative (delay), we pad with apad/adelay instead.
+                        string sysFilter, micFilter;
+                        if (totalTrimSeconds > 0.02)
+                        {
+                            // Audio was early → trim head of both streams
+                            int trimMs = (int)(totalTrimSeconds * 1000);
+                            sysFilter = $"[1:a]atrim=start={totalTrimSeconds.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)},asetpts=PTS-STARTPTS[sys_t]";
+                            micFilter = $"[2:a]atrim=start={totalTrimSeconds.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)},asetpts=PTS-STARTPTS[mic_t]";
+                            muxArgs = $"-y -i \"{_tempFilePath}\" -i \"{_tempAudioPath}\" -i \"{_tempMicAudioPath}\" -filter_complex \"{sysFilter};{micFilter};[mic_t]{volFilter}[mic_boost];[sys_t][mic_boost]amix=inputs=2:duration=longest[a]\" -map 0:v -map \"[a]\" -c:v copy -c:a aac -b:a 192k -movflags +faststart \"{_finalTempPath}\"";
+                        }
+                        else if (totalTrimSeconds < -0.02)
+                        {
+                            // Audio was late → delay both streams with adelay
+                            int delayMs = (int)(Math.Abs(totalTrimSeconds) * 1000);
+                            sysFilter = $"[1:a]adelay={delayMs}|{delayMs}[sys_t]";
+                            micFilter = $"[2:a]adelay={delayMs}|{delayMs}[mic_t]";
+                            muxArgs = $"-y -i \"{_tempFilePath}\" -i \"{_tempAudioPath}\" -i \"{_tempMicAudioPath}\" -filter_complex \"{sysFilter};{micFilter};[mic_t]{volFilter}[mic_boost];[sys_t][mic_boost]amix=inputs=2:duration=longest[a]\" -map 0:v -map \"[a]\" -c:v copy -c:a aac -b:a 192k -movflags +faststart \"{_finalTempPath}\"";
+                        }
+                        else
+                        {
+                            muxArgs = $"-y -i \"{_tempFilePath}\" -i \"{_tempAudioPath}\" -i \"{_tempMicAudioPath}\" -filter_complex \"[2:a]{volFilter}[mic_boost];[1:a][mic_boost]amix=inputs=2:duration=longest[a]\" -map 0:v -map \"[a]\" -c:v copy -c:a aac -b:a 192k -movflags +faststart \"{_finalTempPath}\"";
+                        }
                     }
                     else if (sysExists)
                     {
@@ -332,12 +363,72 @@ namespace ScreenRecApp
                         }
                     }
 
-                    // CLEANUP TEMPS
+                    // CLEANUP VIDEO/MIC TEMPS — but preserve raw audio WAVs until AFTER transcription
+                    // because we feed the clean unmixed mic WAV straight to Whisper instead of 
+                    // re-extracting from the degraded amix MP4 (which causes the 'only system audio transcribed' bug).
+                    string savedMicPath  = micExists  ? _tempMicAudioPath : null;
+                    string savedSysPath  = sysExists  ? _tempAudioPath    : null;
                     try { File.Delete(_tempFilePath); } catch { }
+
+                    Logger.Log("Muxing completed successfully.");
+                    
+                    if (loader != null && !cts.IsCancellationRequested)
+                    {
+                        loader.UpdateStatus("Generating transcript...");
+                        loader.ShowCancelAction(true);
+                    }
+
+                    // For transcription: when both streams exist, mix them so both the speaker's voice
+                    // AND system audio (e.g. a video playing on screen) are captured.
+                    // When only one exists, use whichever is available.
+                    string transcriptionSourceWav = null;
+                    if (savedMicPath != null && File.Exists(savedMicPath) &&
+                        savedSysPath != null && File.Exists(savedSysPath))
+                    {
+                        // Mix raw mic + sys WAVs into a single temp WAV for Whisper
+                        string mixedWav = Path.Combine(Path.GetTempPath(), "ScreenRecApp", $"mix_{Guid.NewGuid()}.wav");
+                        using (var mixProc = new Process())
+                        {
+                            mixProc.StartInfo.FileName = GetFFmpegPath();
+                            mixProc.StartInfo.Arguments = $"-y -i \"{savedSysPath}\" -i \"{savedMicPath}\" -filter_complex \"[0:a][1:a]amix=inputs=2:duration=longest[a]\" -map \"[a]\" \"{mixedWav}\"";
+                            mixProc.StartInfo.CreateNoWindow = true;
+                            mixProc.StartInfo.UseShellExecute = false;
+                            mixProc.Start();
+                            await Task.Run(() => mixProc.WaitForExit(30000));
+                        }
+                        transcriptionSourceWav = File.Exists(mixedWav) ? mixedWav : savedMicPath;
+                        Logger.Log($"[Transcription] Using mixed sys+mic WAV");
+                    }
+                    else if (savedMicPath != null && File.Exists(savedMicPath))
+                    {
+                        transcriptionSourceWav = savedMicPath;
+                        Logger.Log($"[Transcription] Using mic-only WAV");
+                    }
+                    else if (savedSysPath != null && File.Exists(savedSysPath))
+                    {
+                        transcriptionSourceWav = savedSysPath;
+                        Logger.Log($"[Transcription] Using sys-only WAV");
+                    }
+
+                    string transcriptText = await TranscriptionHelper.GenerateTranscriptionsAsync(_finalTempPath, transcriptionSourceWav, loader, cts.Token);
+                    
+                    if (loader != null && !cts.IsCancellationRequested && !string.IsNullOrWhiteSpace(transcriptText))
+                    {
+                        loader.UpdateStatus("Generating summary...");
+                    }
+
+                    await SummarizationHelper.GenerateSummaryAsync(_finalTempPath, transcriptText, cts.Token);
+
+                    if (loader != null) 
+                    {
+                        loader.ShowCancelAction(false);
+                        loader.UpdateStatus("Wrapping up...");
+                    }
+
+                    // Now safe to delete raw audio temps
                     try { File.Delete(_tempAudioPath); } catch { }
                     try { File.Delete(_tempMicAudioPath); } catch { }
 
-                    Logger.Log("Muxing completed successfully.");
                     CompactMemory(); // Aggressively free RAM after heavy recording session
                     return _finalTempPath;
                 }
