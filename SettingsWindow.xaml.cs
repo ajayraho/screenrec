@@ -57,11 +57,22 @@ namespace ScreenRecApp
             AudioSyncSlider.Value = SettingsManager.Settings.AudioSyncOffsetMs;
             AudioSyncText.Text = $"{SettingsManager.Settings.AudioSyncOffsetMs} ms";
 
+            // Map Transcription Language
+            foreach (System.Windows.Controls.ComboBoxItem item in LangCombo.Items) {
+                if (item.Tag?.ToString() == SettingsManager.Settings.TranscriptionLanguage) {
+                    LangCombo.SelectedItem = item; break;
+                }
+            }
+            if (LangCombo.SelectedItem == null) LangCombo.SelectedIndex = 0;
+
             _timer = new System.Windows.Threading.DispatcherTimer();
             _timer.Interval = System.TimeSpan.FromMilliseconds(500);
             _timer.Tick += (s, e) => UpdateStatus();
             _timer.Start();
             UpdateStatus();
+
+            CheckWhisperPlugin();
+            CheckLlmPlugin();
 
             this.Closed += SettingsWindow_Closed;
         }
@@ -139,6 +150,106 @@ namespace ScreenRecApp
             }
         }
 
+        private void CheckWhisperPlugin()
+        {
+            string pluginsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "plugins", "whisper");
+            bool pluginFound = false;
+            string foundModelInfo = "";
+
+            if (Directory.Exists(pluginsDir))
+            {
+                var files = Directory.GetFiles(pluginsDir, "*.bin");
+                if (files.Length > 0)
+                {
+                    pluginFound = true;
+                    foundModelInfo = Path.GetFileName(files[0]);
+                }
+            }
+
+            if (pluginFound)
+            {
+                TranscriptionStatusText.Text = $"🟢 Plugin Detected ({foundModelInfo})";
+                TranscriptionStatusText.Foreground = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#a6e3a1"));
+                DownloadPluginBtn.Visibility = Visibility.Collapsed;
+                GenerateSubtitlesCheck.IsEnabled = true;
+                GenerateTranscriptCheck.IsEnabled = true;
+                LangCombo.IsEnabled = true;
+
+                GenerateSubtitlesCheck.IsChecked = SettingsManager.Settings.GenerateSubtitles;
+                GenerateTranscriptCheck.IsChecked = SettingsManager.Settings.GenerateTranscript;
+            }
+            else
+            {
+                TranscriptionStatusText.Text = "🔴 Plugin Missing";
+                TranscriptionStatusText.Foreground = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#f38ba8"));
+                DownloadPluginBtn.Visibility = Visibility.Visible;
+                GenerateSubtitlesCheck.IsEnabled = false;
+                GenerateTranscriptCheck.IsEnabled = false;
+                LangCombo.IsEnabled = false;
+
+                GenerateSubtitlesCheck.IsChecked = false;
+                GenerateTranscriptCheck.IsChecked = false;
+            }
+        }
+
+        private void DownloadPlugin_Click(object sender, RoutedEventArgs e)
+        {
+            System.Windows.MessageBox.Show(
+                "To enable AI Transcriptions:\n\n1. Download a ggml model (e.g. ggml-medium.bin) from huggingface (ggerganov/whisper.cpp).\n2. Create a folder named 'plugins\\whisper' next to this executable.\n3. Place the .bin file inside.", 
+                "Download Whisper Plugin", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://huggingface.co/ggerganov/whisper.cpp/tree/main") { UseShellExecute = true });
+        }
+
+        private void CheckLlmPlugin()
+        {
+            string pluginsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "plugins", "llm");
+            bool pluginFound = false;
+            string foundModelInfo = "";
+
+            if (Directory.Exists(pluginsDir))
+            {
+                var files = Directory.GetFiles(pluginsDir, "*.gguf");
+                if (files.Length > 0)
+                {
+                    pluginFound = true;
+                    foundModelInfo = Path.GetFileName(files[0]);
+                }
+            }
+
+            if (pluginFound)
+            {
+                LlmStatusText.Text = $"🟢 Plugin Detected ({foundModelInfo})";
+                LlmStatusText.Foreground = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#a6e3a1"));
+                DownloadLlmBtn.Visibility = Visibility.Collapsed;
+                GenerateSummaryCheck.IsEnabled = true;
+
+                GenerateSummaryCheck.IsChecked = SettingsManager.Settings.GenerateSummary;
+            }
+            else
+            {
+                LlmStatusText.Text = "🔴 Plugin Missing";
+                LlmStatusText.Foreground = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#f38ba8"));
+                DownloadLlmBtn.Visibility = Visibility.Visible;
+                GenerateSummaryCheck.IsEnabled = false;
+
+                GenerateSummaryCheck.IsChecked = false;
+            }
+        }
+
+        private void DownloadLlm_Click(object sender, RoutedEventArgs e)
+        {
+            System.Windows.MessageBox.Show(
+                "To enable AI Summarization:\n\n1. Download a GGUF model (e.g. Phi-3-mini-4k-instruct-q4.gguf) from huggingface.\n2. Create a folder named 'plugins\\llm' next to this executable.\n3. Place the .gguf file inside.", 
+                "Download Summarizer Plugin", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/tree/main") { UseShellExecute = true });
+        }
+
+        private void RefreshPlugin_Click(object sender, RoutedEventArgs e)
+        {
+            CheckWhisperPlugin();
+            CheckLlmPlugin();
+        }
+
         private void Save_Click(object sender, RoutedEventArgs e)
         {
             uint currentMods = 0;
@@ -161,6 +272,13 @@ namespace ScreenRecApp
             SettingsManager.Settings.MicVolumeBoost = Math.Round(MicBoostSlider.Value, 1);
             SettingsManager.Settings.CaptureMicAudio = CaptureMicCheck.IsChecked == true;
             SettingsManager.Settings.AudioSyncOffsetMs = (int)AudioSyncSlider.Value;
+            
+            SettingsManager.Settings.GenerateSubtitles = GenerateSubtitlesCheck.IsChecked == true;
+            SettingsManager.Settings.GenerateTranscript = GenerateTranscriptCheck.IsChecked == true;
+            SettingsManager.Settings.GenerateSummary = GenerateSummaryCheck.IsChecked == true;
+
+            if (LangCombo.SelectedItem is System.Windows.Controls.ComboBoxItem lItem && lItem.Tag != null)
+                SettingsManager.Settings.TranscriptionLanguage = lItem.Tag.ToString()!;
 
             if (int.TryParse(TimerMinutesBox.Text, out int mins) && mins > 0)
                 SettingsManager.Settings.NotificationTimerMinutes = mins;
