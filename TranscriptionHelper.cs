@@ -76,8 +76,7 @@ namespace ScreenRecApp
                 // because the model now "expects" to hear Hindi alongside English content.
                 builder = builder.WithPrompt("Hindi English");
 
-                Logger.Log("[Transcription] in progress...");
-                using var processor = builder.Build();
+                Logger.Log("[Transcription] Transcribing sources sequentially...");
 
                 var taggedSegments = new List<TaggedSegment>();
 
@@ -92,6 +91,11 @@ namespace ScreenRecApp
 
                 foreach (var source in sources)
                 {
+                    // Create a brand new Processor instance for EVERY source file!
+                    // If you reuse the same processor, Whisper completely hallucinates on the second file
+                    // because it tries to use the acoustic context from the first file.
+                    using var processor = builder.Build();
+
                     string tempWav = mp4Path.Replace(".mp4", $"_{source.Name}_whisper.wav");
                     tempWavPathsToClean.Add(tempWav);
 
