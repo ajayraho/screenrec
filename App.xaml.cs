@@ -163,12 +163,13 @@ namespace ScreenRecApp
 
             _notificationTimer.Stop();
             _trayTooltipTimer.Stop();
+            _notifyIcon.Text = "Saving in progress...";
             _stopRecordingMenuItem.Visible = false;
 
             LoaderWindow loader = new LoaderWindow();
             loader.Show();
 
-            string tempFilePath = await CurrentRecordingService.StopRecording();
+            string tempFilePath = await CurrentRecordingService.StopRecording(loader);
             Logger.Log($"Stopped recording. Temp path: {tempFilePath}");
             _devWindow?.SetRecordingState(false);
             _notifyIcon.Text = "Sound Service Broker";
@@ -193,6 +194,15 @@ namespace ScreenRecApp
                     {
                         File.Move(tempFilePath, targetFile, true);
                         Logger.Log($"File successfully saved to {targetFile}");
+
+                        string tempSrt = tempFilePath.Replace(".mp4", ".srt");
+                        if (File.Exists(tempSrt)) File.Move(tempSrt, targetFile.Replace(".mp4", ".srt"), true);
+
+                        string tempTxt = tempFilePath.Replace(".mp4", "_transcript.txt");
+                        if (File.Exists(tempTxt)) File.Move(tempTxt, targetFile.Replace(".mp4", "_transcript.txt"), true);
+
+                        string tempSum = tempFilePath.Replace(".mp4", "_summary.txt");
+                        if (File.Exists(tempSum)) File.Move(tempSum, targetFile.Replace(".mp4", "_summary.txt"), true);
                     }
                     catch (Exception ex)
                     {
@@ -202,6 +212,9 @@ namespace ScreenRecApp
                 else
                 {
                     try { File.Delete(tempFilePath); Logger.Log("User cancelled save. Temp file deleted."); } catch { }
+                    try { File.Delete(tempFilePath.Replace(".mp4", ".srt")); } catch { }
+                    try { File.Delete(tempFilePath.Replace(".mp4", "_transcript.txt")); } catch { }
+                    try { File.Delete(tempFilePath.Replace(".mp4", "_summary.txt")); } catch { }
                 }
             }
             else
