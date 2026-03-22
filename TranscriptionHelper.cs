@@ -101,7 +101,9 @@ namespace ScreenRecApp
                     using (var process = new Process())
                     {
                         process.StartInfo.FileName = RecordingService.GetFFmpegPath();
-                        process.StartInfo.Arguments = $"-y -i \"{source.Path}\" -vn -ar 16000 -ac 1 -c:a pcm_s16le \"{tempWav}\"";
+                        // Added -af dynaudnorm to dynamically boost quiet system/mic audio to standard loudness.
+                        // Loopback capture depends on Windows volume sliders, so it's often too quiet for Whisper.
+                        process.StartInfo.Arguments = $"-y -i \"{source.Path}\" -vn -ar 16000 -ac 1 -c:a pcm_s16le -af \"dynaudnorm=p=0.9:m=100:s=5:g=5\" \"{tempWav}\"";
                         process.StartInfo.CreateNoWindow = true;
                         process.StartInfo.UseShellExecute = false;
                         process.Start();
