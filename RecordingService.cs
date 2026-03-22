@@ -21,6 +21,9 @@ namespace ScreenRecApp
         private WasapiCapture _micCapture;
         private WaveFileWriter _micWriter;
 
+        // Hack to keep system audio awake so WasapiLoopbackCapture doesn't skip silence gaps
+        private WasapiOut _silenceOut;
+
         public bool IsRecording { get; private set; }
 
         public string TempFilePath => _tempFilePath;
@@ -84,9 +87,25 @@ namespace ScreenRecApp
             {
                 _audioCapture = new WasapiLoopbackCapture();
                 _audioWriter = new WaveFileWriter(_tempAudioPath, _audioCapture.WaveFormat);
-                _audioCapture.DataAvailable += (s, a) => { _audioWriter.Write(a.Buffer, 0, a.BytesRecorded); };
+                _audioCapture.DataAvailable += (s, a) => { _audioWriter?.Write(a.Buffer, 0, a.BytesRecorded); };
                 _audioCapture.StartRecording();
                 _audioStartTime = DateTime.UtcNow;
+
+                // REAL FIX FOR WASAPI JITTER/SILENCE COMPRESSION:
+                // WasapiLoopbackCapture completely stops firing events when no audio plays.
+                // By forcing the system to play a silent stream in the background via WasapiOut,
+                // the Windows audio engine never sleeps. DataAvailable fires continuously in real-time,
+                // padding sys.wav with perfectly synced real-time zero bytes naturally.
+                try
+                {
+                    _silenceOut = new WasapiOut(NAudio.CoreAudioApi.AudioClientShareMode.Shared, 100);
+                    _silenceOut.Init(new NAudio.Wave.SilenceProvider(_audioCapture.WaveFormat));
+                    _silenceOut.Play();
+                }
+                catch (Exception silenceEx)
+                {
+                    Logger.LogError(silenceEx, "Failed to start silence provider");
+                }
             }
             catch (Exception ex)
             {
@@ -201,17 +220,20 @@ namespace ScreenRecApp
                 // STOP NAUDIO SYSTEM
                 try
                 {
+                    if (_silenceOut != null)
+                    {
+                        try { _silenceOut.Stop(); _silenceOut.Dispose(); } catch { }
+                        _silenceOut = null;
+                    }
+
                     if (_audioCapture != null)
                     {
                         _audioCapture.StopRecording();
                         _audioCapture.Dispose();
                         _audioCapture = null;
                     }
-                    if (_audioWriter != null)
-                    {
-                        _audioWriter.Dispose();
-                        _audioWriter = null;
-                    }
+                    _audioWriter?.Dispose();
+                    _audioWriter = null;
                 }
                 catch (Exception ex)
                 {
@@ -289,29 +311,10 @@ namespace ScreenRecApp
 
                     if (sysExists && micExists)
                     {
-                        // Apply trim inside filter_complex per-stream to avoid -itsoffset global stacking bug.
-                        // When trim is negative (delay), we pad with apad/adelay instead.
-                        string sysFilter, micFilter;
-                        if (totalTrimSeconds > 0.02)
-                        {
-                            // Audio was early → trim head of both streams
-                            int trimMs = (int)(totalTrimSeconds * 1000);
-                            sysFilter = $"[1:a]atrim=start={totalTrimSeconds.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)},asetpts=PTS-STARTPTS[sys_t]";
-                            micFilter = $"[2:a]atrim=start={totalTrimSeconds.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)},asetpts=PTS-STARTPTS[mic_t]";
-                            muxArgs = $"-y -i \"{_tempFilePath}\" -i \"{_tempAudioPath}\" -i \"{_tempMicAudioPath}\" -filter_complex \"{sysFilter};{micFilter};[mic_t]{volFilter}[mic_boost];[sys_t][mic_boost]amix=inputs=2:duration=longest[a]\" -map 0:v -map \"[a]\" -c:v copy -c:a aac -b:a 192k -movflags +faststart \"{_finalTempPath}\"";
-                        }
-                        else if (totalTrimSeconds < -0.02)
-                        {
-                            // Audio was late → delay both streams with adelay
-                            int delayMs = (int)(Math.Abs(totalTrimSeconds) * 1000);
-                            sysFilter = $"[1:a]adelay={delayMs}|{delayMs}[sys_t]";
-                            micFilter = $"[2:a]adelay={delayMs}|{delayMs}[mic_t]";
-                            muxArgs = $"-y -i \"{_tempFilePath}\" -i \"{_tempAudioPath}\" -i \"{_tempMicAudioPath}\" -filter_complex \"{sysFilter};{micFilter};[mic_t]{volFilter}[mic_boost];[sys_t][mic_boost]amix=inputs=2:duration=longest[a]\" -map 0:v -map \"[a]\" -c:v copy -c:a aac -b:a 192k -movflags +faststart \"{_finalTempPath}\"";
-                        }
-                        else
-                        {
-                            muxArgs = $"-y -i \"{_tempFilePath}\" -i \"{_tempAudioPath}\" -i \"{_tempMicAudioPath}\" -filter_complex \"[2:a]{volFilter}[mic_boost];[1:a][mic_boost]amix=inputs=2:duration=longest[a]\" -map 0:v -map \"[a]\" -c:v copy -c:a aac -b:a 192k -movflags +faststart \"{_finalTempPath}\"";
-                        }
+                        // apad extends sys.wav with silence so it is never shorter than mic.
+                        // mic_boost is passed FIRST to amix → duration=first uses mic's length.
+                        // normalize=0 keeps mic at full volume even when sys audio is silent.
+                        muxArgs = $"-y -i \"{_tempFilePath}\" {audioTrim}-i \"{_tempAudioPath}\" {audioTrim}-i \"{_tempMicAudioPath}\" -filter_complex \"[1:a]apad[sys_full];[2:a]{volFilter}[mic_boost];[mic_boost][sys_full]amix=inputs=2:duration=first:normalize=0[a]\" -map 0:v -map \"[a]\" -c:v copy -c:a aac -b:a 192k -movflags +faststart \"{_finalTempPath}\"";
                     }
                     else if (sysExists)
                     {
@@ -390,7 +393,8 @@ namespace ScreenRecApp
                         using (var mixProc = new Process())
                         {
                             mixProc.StartInfo.FileName = GetFFmpegPath();
-                            mixProc.StartInfo.Arguments = $"-y -i \"{savedSysPath}\" -i \"{savedMicPath}\" -filter_complex \"[0:a][1:a]amix=inputs=2:duration=longest[a]\" -map \"[a]\" \"{mixedWav}\"";
+                            // Apply the same apad fix for transcription mix to ensure sys audio isn't cut short
+                            mixProc.StartInfo.Arguments = $"-y -i \"{savedSysPath}\" -i \"{savedMicPath}\" -filter_complex \"[0:a]apad[sys_full];[1:a][sys_full]amix=inputs=2:duration=first:normalize=0[a]\" -map \"[a]\" \"{mixedWav}\"";
                             mixProc.StartInfo.CreateNoWindow = true;
                             mixProc.StartInfo.UseShellExecute = false;
                             mixProc.Start();
