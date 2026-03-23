@@ -7,7 +7,8 @@ This major version introduces state-of-the-art on-device AI integration and comp
 ### Advanced AI Integrations
 - **LLM-Based Summarization:** Integrated the LLamaSharp framework to generate intelligent summaries of your transcriptions. This operates entirely on the CPU to guarantee cross-device compatibility without requiring dedicated GPUs. The system is engineered to gracefully understand bilingual Hinglish/English dialogues.
 - **Dual-Stream Whisper Transcription:** Rewrote `TranscriptionHelper` to isolate and transcribe the microphone and system audio independently through 16kHz resampled streams. This prevents overlapping audio tracks from destructively interfering with Whisper's token evaluations, seamlessly stitching them together chronologically.
-- **Whisper Hallucination Filtering:** Added aggressive regex filtering to strip natively hallucinated tokens like `[non-english speech]`, `[music]`, and trailing recursive noise strings completely off the final `.srt` and `.txt` records.
+- **Whisper 'No Speech' Block Override:** Disabled Whisper.net's native heuristic that automatically drops entire 30-second processing windows if they contain "insufficient speech" (`WithNoSpeechThreshold(100f)`). This fixes a critical flaw where user speech scattered lightly across long periods of silence was erroneously discarded.
+- **Whisper Hallucination Filtering:** Added aggressive regex filtering to strip natively hallucinated tokens like `[non-english speech]`, `[music]`, and trailing recursive noise strings completely off the final `.srt` and `.txt` records, alongside rigorous exact-trailing duplicate trimming to prevent infinite repetition loops.
 - **Intelligent Dual-Cancellation Pipelines:** Converted the post-processing loading GUI to expose discrete "Cancel Transcription" and "Cancel Summarization" hooks, allowing the raw `.mp4` video to finalize instantly if you bypass AI steps.
 
 ### User Interface & Experience
@@ -16,7 +17,8 @@ This major version introduces state-of-the-art on-device AI integration and comp
 - **Glassmorphism 'About' Integration:** Injected a beautiful, corner-radiused Glassmorphism-themed "About" screen directly mapped to a new item in the system-tray context menu.
 
 ### Architecture & Stability
-- **Global Acoustic Synchronization Fix:** Rebuilt the `WasapiLoopbackCapture` baseline to actively inject a `WhiteNoiseProvider` continuous stream at an inaudible volume. This totally locks the stream millisecond clock, permanently obliterating issues where absolute acoustic silence caused the Windows Audio engine to drop out and corrupt FFmpeg alignments!
+- **Global Acoustic Synchronization Fix:** Rebuilt the NAudio `WasapiLoopbackCapture` baseline to actively inject a `WhiteNoiseProvider` continuous loop at an inaudible volume. This completely overrides the Windows Audio Session API behavior which goes to "sleep" during absolute acoustic silence, which previously corrupted FFmpeg frame timings!
+- **FFmpeg Null-Padding Alignments:** Rearchitected the background demuxing/mixing command using `apad` filters mapped against `duration=first` logic (`-filter_complex "amix=inputs=2:duration=first:dropout_transition=2:normalize=0"`). This guarantees system audio dynamically pads out perfectly to match microphone duration lengths, even if a user mutes their computer audio entirely mid-recording.
 - **Concurrent Session Isolation:** Overhauled the `RecordingService` internal state paths by strictly scoping `_tempFilePath` variables locally per operation. You can now press the Record hotkey to start capturing immediately while the previous background AI job is still writing out your `.srt` files without them dangerously colliding!
 
 ---
