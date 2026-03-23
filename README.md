@@ -1,10 +1,25 @@
-<p align="center">
-  <img src="app_icon.png" alt="App Icon" width="96" />
-  <br/>
-  <h2>Sound Service Broker (ScreenRec)</h2>
-</p>
+<div align="center">
 
-A high-performance, stealth-oriented Windows screen recording utility engineered to operate entirely as a lightweight background service. Built natively using C#, WPF, and FFmpeg, it focuses on remaining entirely inconspicuous in the system tray while delivering robust 60FPS video capture and offline, on-device AI transcription processing.
+<img src="app_icon.ico" alt="App Icon" width="96" />
+
+# Sound Service Broker (ScreenRec)
+
+![C#](https://img.shields.io/badge/C%23-11.0+-blue.svg)
+![.NET](https://img.shields.io/badge/.NET-9.0-purple.svg)
+![WPF](https://img.shields.io/badge/WPF-UI-blueviolet.svg)
+![FFmpeg](https://img.shields.io/badge/FFmpeg-6.0+-green.svg)
+![Whisper](https://img.shields.io/badge/Whisper.net-AI-orange.svg)
+![LLamaSharp](https://img.shields.io/badge/LLamaSharp-LLM-red.svg)
+
+*A high-performance, stealth-oriented Windows screen recording utility engineered to operate entirely as a lightweight background service with on-device AI transcription.*
+
+[**Why ScreenRec?**](#why-use-sound-service-broker) •
+[**Capabilities**](#core-capabilities) •
+[**AI Features**](#version-2-ai-features) •
+[**Installation**](#system-requirements-and-installation) •
+[**Usage**](#configuration-and-usage)
+
+</div>
 
 ---
 
@@ -46,6 +61,22 @@ The application is distributed as a self-contained, portable executable. It does
 2.  Extract the contents to a standard directory.
 3.  Ensure `ffmpeg.exe` is present in the exact same directory as `SoundServiceBroker.exe`. This is bundled by default in the official release package.
 4.  Run `SoundServiceBroker.exe`.
+
+### Setting up AI Plugins (Optional)
+
+The core screen recording application functions perfectly out-of-the-box without AI models. 
+However, to activate the post-processing Transcription and Summarization pipelines, you must provide your own offline weights:
+
+1. **Whisper Transcription:** Download any standard Whisper `ggml` model. We recommend **`ggml-medium.bin`** for accurate Hinglish/English translation, or `ggml-base.bin` for sheer speed. Place the downloaded `.bin` file inside the `plugins/whisper` directory.
+2. **LLM Summarization:** Download a CPU-optimized GGUF architecture model. We strongly recommend **`Phi-3-mini-4k-instruct-q4.gguf`** (or a highly-quantized Llama 3 8B model) to strike the perfect balance between prompt comprehension and RAM usage. Place the downloaded `.gguf` file inside the `plugins/llm` directory.
+3. Double-click the tray icon to open **Settings**, expand the **Advanced AI Plugins** panel, and explicitly select your loaded models from the dropdown arrays!
+
+### AI System Requirements
+
+Because ScreenRec operates entirely offline to protect privacy, executing AI heavily scales off your local hardware:
+* **Storage:** ~1.5GB for `ggml-medium.bin` and ~2.4GB for a Q4 `Phi-3` model.
+* **Memory (RAM):** 8GB absolute minimum. **16GB is highly recommended** because LLM summarization utilizes CPU execution to guarantee universal compatibility across graphical architectures.
+* **Processor:** Multi-core CPUs (e.g., modern Ryzen or Intel i5/i7) will process the audio waveforms exponentially faster.
 
 ## Configuration and Usage
 
@@ -92,4 +123,8 @@ Ensure `ffmpeg.exe` is placed in the output directory (`bin/Release/net9.0-windo
 
 ---
 
+<div align="center">
+
 Made with ❤️ by Ajit K.
+
+</div>
