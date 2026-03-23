@@ -29,6 +29,8 @@ namespace ScreenRecApp
         public bool GenerateTranscript { get; set; } = false;
         public bool GenerateSummary { get; set; } = false;
         public string TranscriptionLanguage { get; set; } = "auto";
+        public string WhisperModelFile { get; set; } = ""; // Empty = auto-pick first .bin
+        public string LlmModelFile { get; set; } = "";     // Empty = auto-pick first .gguf
     }
 
     public static class SettingsManager

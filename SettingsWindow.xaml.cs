@@ -174,6 +174,17 @@ namespace ScreenRecApp
                 GenerateSubtitlesCheck.IsEnabled = true;
                 GenerateTranscriptCheck.IsEnabled = true;
                 LangCombo.IsEnabled = true;
+                WhisperModelCombo.IsEnabled = true;
+
+                // Populate model selector
+                WhisperModelCombo.Items.Clear();
+                string whisperDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "plugins", "whisper");
+                foreach (var f in Directory.GetFiles(whisperDir, "*.bin"))
+                    WhisperModelCombo.Items.Add(Path.GetFileName(f));
+                // Pre-select saved or default
+                string savedWhisper = SettingsManager.Settings.WhisperModelFile;
+                WhisperModelCombo.SelectedItem = (WhisperModelCombo.Items.Contains(savedWhisper) ? savedWhisper : null)
+                    ?? (WhisperModelCombo.Items.Count > 0 ? WhisperModelCombo.Items[0] : null);
 
                 GenerateSubtitlesCheck.IsChecked = SettingsManager.Settings.GenerateSubtitles;
                 GenerateTranscriptCheck.IsChecked = SettingsManager.Settings.GenerateTranscript;
@@ -186,6 +197,8 @@ namespace ScreenRecApp
                 GenerateSubtitlesCheck.IsEnabled = false;
                 GenerateTranscriptCheck.IsEnabled = false;
                 LangCombo.IsEnabled = false;
+                WhisperModelCombo.IsEnabled = false;
+                WhisperModelCombo.Items.Clear();
 
                 GenerateSubtitlesCheck.IsChecked = false;
                 GenerateTranscriptCheck.IsChecked = false;
@@ -222,6 +235,17 @@ namespace ScreenRecApp
                 LlmStatusText.Foreground = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#a6e3a1"));
                 DownloadLlmBtn.Visibility = Visibility.Collapsed;
                 GenerateSummaryCheck.IsEnabled = true;
+                LlmModelCombo.IsEnabled = true;
+
+                // Populate model selector
+                LlmModelCombo.Items.Clear();
+                string llmDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "plugins", "llm");
+                foreach (var f in Directory.GetFiles(llmDir, "*.gguf"))
+                    LlmModelCombo.Items.Add(Path.GetFileName(f));
+                // Pre-select saved or default
+                string savedLlm = SettingsManager.Settings.LlmModelFile;
+                LlmModelCombo.SelectedItem = (LlmModelCombo.Items.Contains(savedLlm) ? savedLlm : null)
+                    ?? (LlmModelCombo.Items.Count > 0 ? LlmModelCombo.Items[0] : null);
 
                 GenerateSummaryCheck.IsChecked = SettingsManager.Settings.GenerateSummary;
             }
@@ -231,6 +255,8 @@ namespace ScreenRecApp
                 LlmStatusText.Foreground = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#f38ba8"));
                 DownloadLlmBtn.Visibility = Visibility.Visible;
                 GenerateSummaryCheck.IsEnabled = false;
+                LlmModelCombo.IsEnabled = false;
+                LlmModelCombo.Items.Clear();
 
                 GenerateSummaryCheck.IsChecked = false;
             }
@@ -279,6 +305,12 @@ namespace ScreenRecApp
 
             if (LangCombo.SelectedItem is System.Windows.Controls.ComboBoxItem lItem && lItem.Tag != null)
                 SettingsManager.Settings.TranscriptionLanguage = lItem.Tag.ToString()!;
+
+            // Persist selected model filenames
+            if (WhisperModelCombo.SelectedItem is string wModel)
+                SettingsManager.Settings.WhisperModelFile = wModel;
+            if (LlmModelCombo.SelectedItem is string lModel)
+                SettingsManager.Settings.LlmModelFile = lModel;
 
             if (int.TryParse(TimerMinutesBox.Text, out int mins) && mins > 0)
                 SettingsManager.Settings.NotificationTimerMinutes = mins;

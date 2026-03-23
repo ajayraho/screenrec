@@ -19,7 +19,14 @@ namespace ScreenRecApp
             string[] models = Directory.GetFiles(pluginsDir, "*.gguf");
             if (models.Length == 0) return;
 
+            // Use the user-selected model file if configured and still present, otherwise fall back to first model.
+            string selectedLlm = SettingsManager.Settings.LlmModelFile;
             string modelPath = models[0];
+            if (!string.IsNullOrEmpty(selectedLlm))
+            {
+                string candidate = Path.Combine(pluginsDir, selectedLlm);
+                if (File.Exists(candidate)) modelPath = candidate;
+            }
 
             try
             {
