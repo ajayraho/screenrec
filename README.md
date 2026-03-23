@@ -1,10 +1,25 @@
-# Sound Service Broker (ScreenRecApp)
+<p align="center">
+  <img src="app_icon.png" alt="App Icon" width="96" />
+  <br/>
+  <h2>Sound Service Broker (ScreenRec)</h2>
+</p>
 
-A background utility for hardware-accelerated screen and audio recording on Windows. Built using C#, WPF, and FFmpeg, it focuses on remaining inconspicuous in the system tray while providing robust capture capabilities.
+A high-performance, stealth-oriented Windows screen recording utility engineered to operate entirely as a lightweight background service. Built natively using C#, WPF, and FFmpeg, it focuses on remaining entirely inconspicuous in the system tray while delivering robust 60FPS video capture and offline, on-device AI transcription processing.
+
+---
+
+### Why use Sound Service Broker?
+
+* **Absolute Discretion:** Designed for professionals who need zero friction. There are no splash screens, floating control bars, or noisy notifications. The application runs strictly from the system tray under a generic utility name, protecting your privacy during screen shares or presentations.
+* **On-Device Artificial Intelligence:** You shouldn't have to upload massive video files to cloud providers just to get a transcript. This utility ships with direct C++ hooks into **Whisper.net** and **LLamaSharp**, generating localized subtitles, `.txt` transcripts, and intelligent bilingual action-item summaries entirely on your CPU.
+* **Flawless Output Delivery:** Video files generated are instantly ready for uploading or sharing. FFmpeg processes native AAC audio matrices and flags the `.mp4` packaging with Fast-Start headers for immediate web playback, eliminating the need for post-processing tools like Handbrake.
+* **Global Accessibility:** Engineered with low-latency Windows API hooks (HwndSource), allowing you to trigger recordings from within full-screen games, remote desktop sessions, or heavy applications without alt-tabbing.
+
+---
 
 ## Technical Overview
 
-The application runs as a background process and is controlled entirely via a global keyboard hook. It captures desktop video via gdigrab and system/microphone audio via NAudio (WASAPI), muxing them into optimized MP4 files upon completion.
+Operated entirely via custom global hotkeys, the architecture captures raw desktop frames via `gdigrab` and independent loopback/microphone feeds via `NAudio (WASAPI)`.
 
 ### Core Capabilities
 
