@@ -51,49 +51,38 @@ namespace ScreenRecApp
             string resultText = "";
             try
             {
-                // 2. Initialize Whisper
-                using var whisperFactory = WhisperFactory.FromPath(modelPath);
-
-                string targetLang = SettingsManager.Settings.TranscriptionLanguage;
-
-                // CRITICAL: Whisper.net's .WithLanguage() does NOT accept "auto" as a valid token.
-                // Passing "auto" likely resolves to an undefined/wrong language internally.
-                // True auto-detection = simply don't call .WithLanguage() at all.
-                var builder = whisperFactory.CreateBuilder();
-                if (!string.IsNullOrEmpty(targetLang) && targetLang != "auto")
-                {
-                    builder = builder.WithLanguage(targetLang);
-                    Logger.Log($"[Transcription] language locked to '{targetLang}'");
-                }
-                else
-                {
-                    Logger.Log("[Transcription] language auto-detection enabled (no constraint)");
-                }
-
-                // A short mixed-script prompt biases the token decoder toward Hindi+English phoneme space.
-                // This is the correct use of .WithPrompt() — minimal, factual, not a sentence.
-                // Critically, it prevents the [NON-ENGLISH SPEECH] suppression token from firing,
-                // because the model now "expects" to hear Hindi alongside English content.
-                builder = builder.WithPrompt("Hindi English");
-
                 Logger.Log("[Transcription] Transcribing sources sequentially...");
 
                 var taggedSegments = new List<TaggedSegment>();
 
                 // Whisper emits these special tokens when it refuses to transcribe a segment.
                 // We must filter them out entirely — they are NOT real transcript content.
+                // Added isolated language names like "Hindi" and "English" which Whisper defaults to during infinite zero-byte silence.
                 var hallucinationTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                 {
                     "[video playback]", "[non-english speech]", "[blank_audio]",
                     "[music]", "[applause]", "[laughter]", "[noise]",
-                    "(non-english speech)", "(music)", "(applause)"
+                    "(non-english speech)", "(music)", "(applause)",
+                    "Hindi", "English", "Subtitles", "Subs", "Subtitles by"
                 };
 
                 foreach (var source in sources)
                 {
-                    // Create a brand new Processor instance for EVERY source file!
-                    // If you reuse the same processor, Whisper completely hallucinates on the second file
-                    // because it tries to use the acoustic context from the first file.
+                    // HARD RESET: Load a completely fresh instance of the model and factory for each source.
+                    // This guarantees zero acoustic context leakage from the preceding audio stream.
+                    using var whisperFactory = WhisperFactory.FromPath(modelPath);
+                    var builder = whisperFactory.CreateBuilder();
+                    
+                    string targetLang = SettingsManager.Settings.TranscriptionLanguage;
+                    if (!string.IsNullOrEmpty(targetLang) && targetLang != "auto")
+                    {
+                        builder = builder.WithLanguage(targetLang);
+                    }
+                    // Disable Whisper's heuristic that skips audio it thinks lacks speech.
+                    // When dealing with padded system audio, this heuristic incorrectly drops entire
+                    // 30-second blocks even if they contain valid speech scattered between zeros!
+                    builder = builder.WithNoSpeechThreshold(100f);
+                    
                     using var processor = builder.Build();
 
                     string tempWav = mp4Path.Replace(".mp4", $"_{source.Name}_whisper.wav");
@@ -105,9 +94,10 @@ namespace ScreenRecApp
                     using (var process = new Process())
                     {
                         process.StartInfo.FileName = RecordingService.GetFFmpegPath();
-                        // Added -af dynaudnorm to dynamically boost quiet system/mic audio to standard loudness.
-                        // Loopback capture depends on Windows volume sliders, so it's often too quiet for Whisper.
-                        process.StartInfo.Arguments = $"-y -i \"{source.Path}\" -vn -ar 16000 -ac 1 -c:a pcm_s16le -af \"dynaudnorm=p=0.9:m=100:s=5:g=5\" \"{tempWav}\"";
+                        
+                        // Strip complex noise injection which breaks stream alignments in edge cases,
+                        // and simply boost the system/mic volume statically so Whisper can hear it over the noise floor.
+                        process.StartInfo.Arguments = $"-y -i \"{source.Path}\" -vn -ar 16000 -ac 1 -c:a pcm_s16le -af \"volume=3.0\" \"{tempWav}\"";
                         process.StartInfo.CreateNoWindow = true;
                         process.StartInfo.UseShellExecute = false;
                         process.Start();

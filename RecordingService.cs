@@ -9,6 +9,41 @@ namespace ScreenRecApp
 {
     public class RecordingService
     {
+        // Custom provider that plays microscopic, mathematically non-zero analog hiss (-100dB).
+        // It keeps WASAPI awake EXACTLY like a SilenceProvider, keeping system audio perfectly synchronized,
+        // but completely eliminates the 0x00 absolute-zero bug that crashes Whisper's FFT decoders.
+        private class WhiteNoiseProvider : IWaveProvider
+        {
+            private readonly WaveFormat _waveFormat;
+            private readonly Random _random = new Random();
+
+            public WhiteNoiseProvider(WaveFormat waveFormat) { _waveFormat = waveFormat; }
+            public WaveFormat WaveFormat => _waveFormat;
+
+            public int Read(byte[] buffer, int offset, int count)
+            {
+                if (_waveFormat.Encoding == WaveFormatEncoding.IeeeFloat)
+                {
+                    for (int i = 0; i < count; i += 4)
+                    {
+                        // Tiny floating point noise around 1e-6 (approx -100dB)
+                        float noise = (float)((_random.NextDouble() * 2 - 1) * 0.00001);
+                        byte[] bytes = BitConverter.GetBytes(noise);
+                        Buffer.BlockCopy(bytes, 0, buffer, offset + i, 4);
+                    }
+                }
+                else
+                {
+                    for (int i = 0; i < count; i += 2)
+                    {
+                        short noise = (short)_random.Next(-1, 2);
+                        buffer[offset + i] = (byte)(noise & 0xFF);
+                        buffer[offset + i + 1] = (byte)((noise >> 8) & 0xFF);
+                    }
+                }
+                return count;
+            }
+        }
         private Process _ffmpegProcess;
         private string _tempFilePath;
         private string _tempAudioPath;
@@ -99,7 +134,7 @@ namespace ScreenRecApp
                 try
                 {
                     _silenceOut = new WasapiOut(NAudio.CoreAudioApi.AudioClientShareMode.Shared, 100);
-                    _silenceOut.Init(new NAudio.Wave.SilenceProvider(_audioCapture.WaveFormat));
+                    _silenceOut.Init(new WhiteNoiseProvider(_audioCapture.WaveFormat));
                     _silenceOut.Play();
                 }
                 catch (Exception silenceEx)
