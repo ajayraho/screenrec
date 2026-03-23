@@ -16,6 +16,13 @@ The application runs as a background process and is controlled entirely via a gl
 *   **Web-Optimized Output:** The muxing phase automatically applies the `-movflags +faststart` flag and encodes audio to 192kbps AAC, resulting in videos that can be streamed immediately upon uploading.
 *   **Collision-Proof File Saving:** Generates suggested file names using a strict DD.MM.YY_HH.MM.SS_ format.
 
+### Version 2 AI Features
+
+*   **On-Device Transcription:** Integrates Whisper.net natively to execute cross-stream transcription (capturing both microphone and system audio without overlapping corruption). Generates sidecar `.srt` files entirely offline.
+*   **LLM-Based Summarization:** Connects seamlessly into LLamaSharp to evaluate generated transcripts and output clean, bilingual (Hinglish/English) summaries to `.txt` files directly using CPU inference.
+*   **Dynamic Plugin Routing:** Scans the custom `/plugins/whisper` and `/plugins/llm` folders to dynamically map all discovered `.bin` and `.gguf` AI files. End-users can precisely configure which weights they want mapped at runtime via the settings panel!
+*   **Segmented Cancellation Pipelines:** Full execution isolation allows users to natively cancel "Transcription" and/or "Summarization" separately across independent CancellationToken boundaries without corrupting the finalized MP4 recording out of FFmpeg.
+
 ## System Requirements and Installation
 
 The application is distributed as a self-contained, portable executable. It does not require a .NET runtime installation.
