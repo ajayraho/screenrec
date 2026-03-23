@@ -1,0 +1,123 @@
+<Window x:Class="ScreenRecApp.AboutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="About" Height="360" Width="420"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        WindowStartupLocation="CenterScreen" ResizeMode="NoResize" ShowInTaskbar="False">
+    <Window.Resources>
+        <Style x:Key="LinkButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="#89b4fa"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <TextBlock Text="{TemplateBinding Content}"
+                                   Foreground="{TemplateBinding Foreground}"
+                                   FontSize="{TemplateBinding FontSize}"
+                                   TextDecorations="Underline"
+                                   VerticalAlignment="Center"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border Background="#1e1e2e" CornerRadius="12" BorderBrush="#313244" BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="30" ShadowDepth="0" Color="#000000" Opacity="0.6"/>
+        </Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Close button -->
+            <Button Content="✕" HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Margin="0,12,14,0" Width="28" Height="28"
+                    Background="Transparent" BorderThickness="0" Foreground="#6c7086"
+                    FontSize="14" Cursor="Hand" Click="Close_Click"/>
+
+            <!-- Main content -->
+            <StackPanel Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="40,20,40,10">
+
+                <!-- App icon -->
+                <Border Width="72" Height="72" CornerRadius="16" Margin="0,0,0,16"
+                        HorizontalAlignment="Center">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="#313244" Offset="0"/>
+                            <GradientStop Color="#45475a" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Image x:Name="AppIconImage" Width="48" Height="48" RenderOptions.BitmapScalingMode="HighQuality"/>
+                </Border>
+
+                <!-- App name -->
+                <TextBlock Text="Sound Service Broker" FontSize="22" FontWeight="Bold"
+                           Foreground="#cdd6f4" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+
+                <!-- Tagline -->
+                <TextBlock Text="silent. seamless. always recording." FontSize="12"
+                           Foreground="#6c7086" HorizontalAlignment="Center"
+                           FontStyle="Italic" Margin="0,0,0,20"/>
+
+                <!-- Divider -->
+                <Rectangle Height="1" Fill="#313244" Margin="0,0,0,20"/>
+
+                <!-- Author row -->
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Author" FontSize="13" Foreground="#6c7086" Width="80"/>
+                    <TextBlock Grid.Column="1" Text="Ajit K." FontSize="13" Foreground="#cdd6f4" FontWeight="SemiBold"/>
+                </Grid>
+
+                <!-- Version row -->
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Version" FontSize="13" Foreground="#6c7086" Width="80"/>
+                    <TextBlock x:Name="VersionText" Grid.Column="1" Text="2.0.0" FontSize="13" Foreground="#cdd6f4"/>
+                </Grid>
+
+                <!-- GitHub row -->
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Source" FontSize="13" Foreground="#6c7086" Width="80"/>
+                    <Button Grid.Column="1" Style="{StaticResource LinkButton}"
+                            Content="github.com/ajitk/screenrec"
+                            Click="GitHub_Click" HorizontalAlignment="Left"/>
+                </Grid>
+
+                <!-- Built with row -->
+                <Grid Margin="0,0,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Built with" FontSize="13" Foreground="#6c7086" Width="80"/>
+                    <TextBlock Grid.Column="1" Text="NAudio · Whisper.net · LLamaSharp · FFmpeg"
+                               FontSize="12" Foreground="#585b70" TextWrapping="Wrap"/>
+                </Grid>
+            </StackPanel>
+
+            <!-- Footer -->
+            <Border Grid.Row="1" Background="#181825" CornerRadius="0,0,12,12" Padding="20,12">
+                <TextBlock Text="© 2025 Ajit K. — All rights reserved."
+                           FontSize="11" Foreground="#45475a" HorizontalAlignment="Center"/>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

@@ -81,6 +81,7 @@ namespace ScreenRecApp
             contextMenu.Items.Add(_stopRecordingMenuItem);
             contextMenu.Items.Add(new ToolStripSeparator());
             contextMenu.Items.Add("Settings", null, (s, ev) => OpenSettings());
+            contextMenu.Items.Add("About", null, (s, ev) => { new AboutWindow().ShowDialog(); });
             contextMenu.Items.Add("Exit", null, (s, ev) => Shutdown());
             _notifyIcon.ContextMenuStrip = contextMenu;
             _notifyIcon.DoubleClick += (s, ev) => OpenSettings();
