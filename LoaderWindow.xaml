@@ -1,17 +1,28 @@
 <Window x:Class="ScreenRecApp.LoaderWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Processing" Height="90" Width="300"
+        Title="Processing" Height="100" Width="300"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         WindowStartupLocation="CenterScreen" ShowInTaskbar="False">
     <Border Background="#1e1e2e" CornerRadius="8" BorderBrush="#313244" BorderThickness="1" Padding="15">
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-            <TextBlock x:Name="StatusText" Text="Processing video..." Foreground="#89b4fa" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,8"/>
-            <ProgressBar IsIndeterminate="True" Width="220" Height="4" Foreground="#89b4fa" Background="#181825" BorderThickness="0" Margin="0,0,0,10"/>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                <TextBlock x:Name="InfoText" Text="Saving in background. Don't panic." Foreground="#6c7086" FontSize="10" TextAlignment="Center" Margin="0,0,8,0"/>
-                <TextBlock x:Name="CancelActionText" Text="Cancel AI features" Foreground="#f38ba8" FontSize="10" TextAlignment="Center" Cursor="Hand" TextDecorations="Underline" MouseLeftButtonDown="CancelAction_Click" Visibility="Collapsed"/>
-            </StackPanel>
+            <Grid Margin="0,0,0,6" Width="252">
+                <TextBlock x:Name="StatusText" Text="Processing video..." Foreground="#89b4fa" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <TextBlock x:Name="ProgressText" Text="" Foreground="#cdd6f4" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+            </Grid>
+            <ProgressBar x:Name="MainProgress" IsIndeterminate="True" Width="252" Height="4" Foreground="#89b4fa" Background="#181825" BorderThickness="0" Margin="0,0,0,10"/>
+            <Grid Margin="0,0,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="InfoText" Grid.Column="0" Text="Saving in background. Don't panic." Foreground="#6c7086" FontSize="10" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                
+                <StackPanel Grid.Column="1" Orientation="Vertical" HorizontalAlignment="Right">
+                    <TextBlock x:Name="CancelTranscriptionText" Text="Cancel Transcription" Foreground="#f38ba8" FontSize="10" TextAlignment="Right" Cursor="Hand" TextDecorations="Underline" MouseLeftButtonDown="CancelTranscription_Click" Visibility="Collapsed" Margin="0,0,0,4"/>
+                    <TextBlock x:Name="CancelSummarizationText" Text="Cancel Summarization" Foreground="#f38ba8" FontSize="10" TextAlignment="Right" Cursor="Hand" TextDecorations="Underline" MouseLeftButtonDown="CancelSummarization_Click" Visibility="Collapsed"/>
+                </StackPanel>
+            </Grid>
         </StackPanel>
     </Border>
 </Window>
