@@ -30,8 +30,15 @@ namespace ScreenRecApp
 
             string[] models = Directory.GetFiles(pluginsDir, "*.bin");
             if (models.Length == 0) return "";
-            
+
+            // Use the user-selected model file if configured and still present, otherwise fall back to first model.
+            string selectedModel = SettingsManager.Settings.WhisperModelFile;
             string modelPath = models[0];
+            if (!string.IsNullOrEmpty(selectedModel))
+            {
+                string candidate = Path.Combine(pluginsDir, selectedModel);
+                if (File.Exists(candidate)) modelPath = candidate;
+            }
 
             Logger.Log($"Starting AI Transcription with model: {Path.GetFileName(modelPath)}");
             
@@ -82,8 +89,6 @@ namespace ScreenRecApp
                     // When dealing with padded system audio, this heuristic incorrectly drops entire
                     // 30-second blocks even if they contain valid speech scattered between zeros!
                     builder = builder.WithNoSpeechThreshold(100f);
-                    
-                    using var processor = builder.Build();
 
                     string tempWav = mp4Path.Replace(".mp4", $"_{source.Name}_whisper.wav");
                     tempWavPathsToClean.Add(tempWav);
@@ -110,6 +115,21 @@ namespace ScreenRecApp
                     }
 
                     if (!File.Exists(tempWav)) continue;
+
+                    // Track progress offsets so multi-source progress is additive (0-100 spread across all sources)
+                    int sourceIndex = sources.IndexOf(source);
+                    double segmentPerSource = 100.0 / sources.Count;
+                    double progressBase = sourceIndex * segmentPerSource;
+
+                    // Implement Whisper.net native progress callback. This continuously updates from 0-100 per internal C++ loop!
+                    // Even if Whisper yields NO segments during a 30-second silence stretch, this still animates perfectly real-time.
+                    builder = builder.WithProgressHandler(progressPercent =>
+                    {
+                        int overallPct = (int)(progressBase + (progressPercent / 100.0) * segmentPerSource);
+                        loader?.UpdateProgress(overallPct);
+                    });
+
+                    using var processor = builder.Build();
 
                     Logger.Log($"[Transcription] Transcribing {source.Name} audio...");
 

@@ -241,12 +241,33 @@ namespace ScreenRecApp
         {
             if (!IsRecording) return null;
 
-            using var cts = new System.Threading.CancellationTokenSource();
+            // Capture all session paths into locals IMMEDIATELY before doing anything else.
+            // If the user triggers a new recording while we're still processing (muxing, transcribing),
+            // StartRecording() will overwrite the instance fields with new GUID-based paths.
+            // These locals are our private snapshot — isolated from any new session.
+            string sessionVideoPath   = _tempFilePath;
+            string sessionAudioPath   = _tempAudioPath;
+            string sessionMicPath     = _tempMicAudioPath;
+            string sessionFinalPath   = _finalTempPath;
+
+            using var optimizationCts = new System.Threading.CancellationTokenSource();
+            using var transcriptionCts = new System.Threading.CancellationTokenSource();
+            using var summarizationCts = new System.Threading.CancellationTokenSource();
+
             if (loader != null)
             {
                 loader.UpdateStatus("Optimizing video...");
-                loader.CancelAIRequested += () => {
-                    try { cts.Cancel(); } catch {}
+                
+                // Allow cancelling transcription (which cascades to summarize cancel in the UI)
+                loader.CancelTranscriptionRequested += () =>
+                {
+                    try { transcriptionCts.Cancel(); } catch {}
+                };
+
+                // Allow cancelling purely summarization
+                loader.CancelSummarizationRequested += () =>
+                {
+                    try { summarizationCts.Cancel(); } catch {}
                 };
             }
 
@@ -404,39 +425,47 @@ namespace ScreenRecApp
                     // CLEANUP VIDEO/MIC TEMPS — but preserve raw audio WAVs until AFTER transcription
                     // because we feed the clean unmixed mic WAV straight to Whisper instead of 
                     // re-extracting from the degraded amix MP4 (which causes the 'only system audio transcribed' bug).
-                    string savedMicPath  = micExists  ? _tempMicAudioPath : null;
-                    string savedSysPath  = sysExists  ? _tempAudioPath    : null;
-                    try { File.Delete(_tempFilePath); } catch { }
+                    string savedMicPath = micExists ? sessionMicPath : null;
+                    string savedSysPath = sysExists ? sessionAudioPath : null;
+                    try { File.Delete(sessionVideoPath); } catch { }
 
                     Logger.Log("Muxing completed successfully.");
                     
-                    if (loader != null && !cts.IsCancellationRequested)
+                    if (loader != null)
                     {
                         loader.UpdateStatus("Generating transcript...");
-                        loader.ShowCancelAction(true);
+                        loader.ShowCancelOptions(SettingsManager.Settings.GenerateTranscript || SettingsManager.Settings.GenerateSubtitles, SettingsManager.Settings.GenerateSummary);
                     }
 
-                    string transcriptText = await TranscriptionHelper.GenerateTranscriptionsAsync(_finalTempPath, savedMicPath, savedSysPath, loader, cts.Token);
-                    
-                    if (loader != null && !cts.IsCancellationRequested && !string.IsNullOrWhiteSpace(transcriptText))
+                    string transcriptText = "";
+                    if (!transcriptionCts.IsCancellationRequested)
+                    {
+                        transcriptText = await TranscriptionHelper.GenerateTranscriptionsAsync(sessionFinalPath, savedMicPath, savedSysPath, loader, transcriptionCts.Token);
+                    }
+                    if (loader != null && !summarizationCts.IsCancellationRequested && !string.IsNullOrWhiteSpace(transcriptText))
                     {
                         loader.UpdateStatus("Generating summary...");
+                        // Only summary can be cancelled now
+                        loader.ShowCancelOptions(false, true);
                     }
 
-                    await SummarizationHelper.GenerateSummaryAsync(_finalTempPath, transcriptText, cts.Token);
-
-                    if (loader != null) 
+                    if (!summarizationCts.IsCancellationRequested)
                     {
-                        loader.ShowCancelAction(false);
+                        await SummarizationHelper.GenerateSummaryAsync(sessionFinalPath, transcriptText, summarizationCts.Token);
+                    }
+
+                    if (loader != null)
+                    {
+                        loader.ShowCancelOptions(false, false);
                         loader.UpdateStatus("Wrapping up...");
                     }
 
-                    // Now safe to delete raw audio temps
-                    try { File.Delete(_tempAudioPath); } catch { }
-                    try { File.Delete(_tempMicAudioPath); } catch { }
+                    // Use captured locals — instance fields may already point to a new session by now
+                    try { File.Delete(sessionAudioPath); } catch { }
+                    try { File.Delete(sessionMicPath); } catch { }
 
-                    CompactMemory(); // Aggressively free RAM after heavy recording session
-                    return _finalTempPath;
+                    CompactMemory();
+                    return sessionFinalPath;
                 }
             }
             catch (Exception ex)
