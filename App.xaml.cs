@@ -273,7 +273,6 @@ namespace ScreenRecApp
 
         private void OnNotificationTimerTick(object sender, EventArgs e)
         {
-            _notificationTimer.Stop(); // Ensure only once per recording session
             _notifyIcon.ShowBalloonTip(3000, "Sound Service Broker", " ", ToolTipIcon.None);
         }
 
