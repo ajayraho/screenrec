@@ -97,7 +97,7 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0" Text="Source" FontSize="13" Foreground="#6c7086" Width="80"/>
                     <Button Grid.Column="1" Style="{StaticResource LinkButton}"
-                            Content="github.com/ajitk/screenrec"
+                            Content="github.com/ajayraho/screenrec"
                             Click="GitHub_Click" HorizontalAlignment="Left"/>
                 </Grid>
 
@@ -115,7 +115,7 @@
 
             <!-- Footer -->
             <Border Grid.Row="1" Background="#181825" CornerRadius="0,0,12,12" Padding="20,12">
-                <TextBlock Text="© 2025 Ajit K. — All rights reserved."
+                <TextBlock Text="© 2026 Ajit K. — All rights reserved."
                            FontSize="11" Foreground="#45475a" HorizontalAlignment="Center"/>
             </Border>
         </Grid>

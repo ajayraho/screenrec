@@ -50,7 +50,7 @@ namespace ScreenRecApp
 
         private void GitHub_Click(object sender, RoutedEventArgs e)
         {
-            Process.Start(new ProcessStartInfo("https://github.com/ajitk/screenrec") { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo("https://github.com/ajayraho/screenrec") { UseShellExecute = true });
         }
 
         protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
